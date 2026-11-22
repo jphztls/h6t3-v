@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- Privacy: il browser non può inviare dati a nessun altro indirizzo. Tutto resta sul telefono. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>JRN-1</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="JRN-1">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<style>
+/* --- Token Grado Zero: solo bianco e nero, linee 1px, un'unica dimensione di testo --- */
+:root {
+  --surface: #ffffff; --ink: #000000; --on-ink: #ffffff;
+  --line: var(--ink); --surface-inverse: var(--ink); --ink-inverse: var(--on-ink);
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --border-hairline: 1px; --control-height: 28px;
+  --text: 400 16px/22px var(--font-sans);
+  --led: #ff3b30;
+  color-scheme: light;
+}
+:root[data-theme="dark"] { --surface: #000000; --ink: #ffffff; --on-ink: #000000; color-scheme: dark; }
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+html, body { margin: 0; position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; background: var(--surface); color: var(--ink); font: var(--text); }
+button { font: var(--text); color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.box { border: var(--border-hairline) solid var(--line); }
+
+#app { position: fixed; left: 0; right: 0; top: 0; bottom: 0; margin: 0 auto; max-width: 430px; display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+.top { flex: none; display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 var(--space-3); }
+.top .theme { width: var(--control-height); height: var(--control-height); display: flex; align-items: center; justify-content: flex-end; }
+
+/* Display 2: il feed, dentro un riquadro */
+#d2 { position: relative; flex: 1; min-height: 120px; margin: var(--space-1) var(--space-3) 0; overflow: hidden; }
+.scroll { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; background: var(--surface); }
+.it { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--border-hairline) solid var(--line); }
+.it:first-child { border-top: 0; }
+.it .nm { display: inline-block; padding: 0 3px; margin: 0 -3px 4px; font-variant-numeric: tabular-nums; }
+.it.sel .nm { background: var(--surface-inverse); color: var(--ink-inverse); }
+.it .tx { white-space: pre-wrap; word-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.it img { display: block; width: 100%; max-height: 260px; object-fit: contain; object-position: left center; }
+.it canvas.wf { display: block; width: 100%; height: 34px; }
+
+#detail, #menu { display: none; }
+#d2.show-detail #detail, #d2.show-menu #menu { display: block; }
+#d2.show-detail #feed, #d2.show-menu #feed { visibility: hidden; }
+#detail { padding: var(--space-3); }
+#detail .tx { white-space: pre-wrap; word-wrap: break-word; -webkit-user-select: text; user-select: text; }
+#detail img { display: block; width: 100%; height: auto; }
+#detail canvas.wf { display: block; width: 100%; height: 80px; margin-top: var(--space-3); }
+#detail iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+.mrow { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); }
+.mrow.sel { background: var(--surface-inverse); color: var(--ink-inverse); }
+
+/* Barra: mode select + Display 1 (una riga) */
+#bar { flex: none; display: flex; gap: 0; height: 44px; margin: var(--space-2) var(--space-3) 0; }
+#bar .ms { flex: none; height: 100%; aspect-ratio: 1 / 1; margin-right: -1px; display: flex; align-items: center; justify-content: center; }
+#bar .ms.down { background: var(--surface-inverse); color: var(--ink-inverse); }
+#bar .ms svg { width: 12px; height: 12px; fill: currentColor; }
+#d1 { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+#d1 .l1 { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 var(--space-3); white-space: nowrap; overflow: hidden; }
+#d1 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+#d1.meter canvas { display: block; }
+#d1 #ed { display: none; position: absolute; inset: 0; padding: 0 var(--space-3); overflow: hidden; white-space: pre; align-items: center; }
+#ed .car { display: inline-block; width: 0; border-left: var(--border-hairline) solid var(--ink); margin-right: -1px; height: 20px; vertical-align: -4px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { visibility: hidden; } }
+
+/* Controlli in basso: Shift alto quanto la ghiera */
+#ctl { position: relative; flex: none; display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-3) var(--space-3); }
+#shift { position: relative; width: 72px; border-radius: 9999px; touch-action: none; }
+#shift.down { background: var(--surface-inverse); }
+.led { position: absolute; left: 50%; bottom: 24px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; border: var(--border-hairline) solid var(--line); }
+.led.on { background: var(--ink); }
+#shift.down .led { border-color: var(--on-ink); }
+#shift.down .led.on { background: var(--on-ink); }
+.led.rec { background: var(--led); border-color: var(--led) !important; animation: blink 1s steps(1) infinite; }
+#dial { display: block; touch-action: none; }
+#strip { display: none; touch-action: none; }
+#kb { display: none; }
+
+/* --- Orizzontale: 6 righe uguali (Display 1, 4 file di tastiera, Shift + striscia) --- */
+body.land #app { max-width: none; display: grid; grid-template-rows: repeat(6, 1fr); row-gap: 6px;
+  padding: var(--space-2) max(var(--space-2), env(safe-area-inset-right)) max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left)); }
+body.land .top, body.land #d2, body.land #dial { display: none; }
+body.land #bar { grid-row: 1; height: auto; margin: 0; min-height: 0; }
+body.land #bar .ms { order: 2; margin-right: 0; margin-left: -1px; }
+body.land #d1 #ed { display: flex; }
+body.land #d1 .l1, body.land #d1 canvas { display: none; }
+body.land #kb { grid-row: 2 / 6; display: flex; flex-direction: column; gap: 1px; min-height: 0; background: var(--line); border: var(--border-hairline) solid var(--line); }
+.kr { display: flex; gap: 1px; flex: 1; min-height: 0; }
+.k { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; background: var(--surface); touch-action: none; }
+.k.w15 { flex-grow: 1.5; } .k.w6 { flex-grow: 6; }
+.k.down, .k.lit { background: var(--surface-inverse); color: var(--ink-inverse); }
+body.land #ctl { grid-row: 6; padding: 0; gap: 28px; min-height: 0; }
+body.land #shift { height: 100%; width: 140px; flex: none; }
+body.land .led { left: 16px; top: 50%; bottom: auto; margin: -6px 0 0; }
+body.land #strip { display: block; flex: 1; height: 100%; }
+
+#fin, #fzip { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top"><span>JRN-1</span><button class="theme" id="theme" aria-label="Tema"><svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="8" fill="currentColor"/></svg></button></div>
+  <div id="d2" class="box">
+    <div id="feed" class="scroll"></div>
+    <div id="detail" class="scroll"></div>
+    <div id="menu" class="scroll"></div>
+  </div>
+  <div id="bar">
+    <button class="ms box" id="prev" aria-label="Modalità precedente"><svg viewBox="0 0 12 12"><path d="M9 1 L3 6 L9 11 Z"/></svg></button>
+    <button class="ms box" id="next" aria-label="Modalità successiva"><svg viewBox="0 0 12 12"><path d="M3 1 L9 6 L3 11 Z"/></svg></button>
+    <div id="d1" class="box"><div class="l1"><span id="d1a"></span></div><canvas id="d1c"></canvas><div id="ed"></div></div>
+  </div>
+  <div id="kb"></div>
+  <div id="ctl">
+    <button id="shift" class="box" aria-label="Shift"><i class="led" id="led"></i></button>
+    <canvas id="dial" aria-label="Ghiera"></canvas>
+    <canvas id="strip" class="box" aria-label="Striscia di scorrimento"></canvas>
+  </div>
+</div>
+<input type="file" id="fin">
+<input type="file" id="fzip" accept=".zip,application/zip">
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+["gesturestart", "gesturechange", "gestureend"].forEach((t) => document.addEventListener(t, (e) => e.preventDefault()));
+document.addEventListener("touchmove", (e) => { if (!e.target.closest || !e.target.closest(".scroll, #ed")) e.preventDefault(); }, { passive: false });
+document.addEventListener("dblclick", (e) => e.preventDefault());
+const DPR = Math.min(window.devicePixelRatio || 1, 3);
+
+const S = { mode: 0, theme: "dark", sound: "1" };
+try { Object.assign(S, JSON.parse(store.get("jrn1-set", "{}"))); } catch (e) {}
+const saveS = () => store.set("jrn1-set", JSON.stringify(S));
+document.documentElement.dataset.theme = S.theme;
+
+/* ============ Archivio interno: IndexedDB, solo sul telefono ============ */
+let db = null;
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("jrn1", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("items", { keyPath: "name" });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+const tx = (mode, fn) => new Promise((res, rej) => { const t = db.transaction("items", mode), s = t.objectStore("items"); const out = fn(s); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); });
+const dbAll = () => tx("readonly", (s) => s.getAll());
+const dbPut = (it) => tx("readwrite", (s) => s.put(it));
+const dbDel = (name) => tx("readwrite", (s) => s.delete(name));
+const dbClear = () => tx("readwrite", (s) => s.clear());
+
+let items = [];                                       // dal più recente al più vecchio
+const pad = (n, l) => String(n).padStart(l || 2, "0");
+const ymd = (d) => pad(d.getFullYear() % 100) + pad(d.getMonth() + 1) + pad(d.getDate());
+const parseName = (n) => { const m = /^(\d{6})_(\d+)$/.exec(n); return m ? [m[1], +m[2]] : null; };
+function sortItems() {
+  items.sort((a, b) => { const A = parseName(a.name) || ["", 0], B = parseName(b.name) || ["", 0]; return A[0] === B[0] ? B[1] - A[1] : (A[0] < B[0] ? 1 : -1); });
+}
+function nextName(d) {
+  const day = ymd(d || new Date()); let n = 0;
+  for (const it of items) { const p = parseName(it.name); if (p && p[0] === day) n = Math.max(n, p[1]); }
+  return day + "_" + (n + 1);
+}
+const EXT = { image: ["jpg", "jpeg", "png", "heic", "heif", "webp", "gif"], audio: ["m4a", "mp3", "wav", "aac", "webm", "ogg", "caf", "mp4"], text: ["txt", "md"], pdf: ["pdf"] };
+function typeOf(ext, mime) {
+  ext = (ext || "").toLowerCase(); mime = mime || "";
+  for (const t in EXT) if (EXT[t].includes(ext)) return t === "audio" && mime.startsWith("video") ? "file" : t;
+  if (mime.startsWith("image/")) return "image"; if (mime.startsWith("audio/")) return "audio"; if (mime.startsWith("text/")) return "text"; if (mime === "application/pdf") return "pdf";
+  return "file";
+}
+const extOf = (fn) => { const i = fn.lastIndexOf("."); return i > 0 ? fn.slice(i + 1).toLowerCase() : ""; };
+const MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", webp: "image/webp", gif: "image/gif", m4a: "audio/mp4", mp4: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac", webm: "audio/webm", ogg: "audio/ogg", caf: "audio/x-caf", txt: "text/plain", md: "text/markdown", pdf: "application/pdf" };
+
+async function addItem(it) {
+  it.name = it.name || nextName(); it.created = it.created || Date.now();
+  await dbPut(it); items.push(it); sortItems(); sel = items.indexOf(it); renderFeed(true);
+  sound("act"); flash("Salvato " + it.name);
+  return it;
+}
+
+/* ============ Audio: clic come in CCD-1 / DSP-1 ============ */
+let actx = null, noiseBuf = null;
+function audio() {
+  if (actx) { if (actx.state === "suspended") actx.resume(); return actx; }
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    noiseBuf = actx.createBuffer(1, Math.round(actx.sampleRate * 0.08), actx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  } catch (e) { actx = null; }
+  return actx;
+}
+function tick(t0, freq, dur, gain, hp) {
+  const a = actx, src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.value = hp; f.Q.value = 1.2;
+  g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f).connect(g).connect(a.destination); src.start(t0, Math.random() * 0.03, dur + 0.01);
+  const o = a.createOscillator(), og = a.createGain(); o.frequency.value = freq; o.type = "square";
+  og.gain.setValueAtTime(gain * 0.25, t0); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur * 0.6);
+  o.connect(og).connect(a.destination); o.start(t0); o.stop(t0 + dur);
+}
+const SND = {
+  detent: [[3200, 0.006, 0.12, 6000]], browse: [[2000, 0.007, 0.10, 3800]], stop: [[700, 0.012, 0.16, 1200]],
+  key: [[2600, 0.005, 0.09, 5200]], set: [[1500, 0.020, 0.30, 2600]], menu: [[1100, 0.022, 0.30, 2000]],
+  act: [[900, 0.035, 0.40, 2600], [1400, 0.012, 0.12, 2800, 0.05]],
+};
+let lastSnd = 0;
+function sound(k) {
+  if (S.sound !== "1" || !actx) return;
+  const now = performance.now(); if ((k === "detent" || k === "browse") && now - lastSnd < 18) return; lastSnd = now;
+  const t0 = actx.currentTime + 0.002;
+  for (const [f, d, g, bp, dt] of SND[k]) tick(t0 + (dt || 0), f, d, g, bp);
+}
+["touchend", "click"].forEach((t) => document.addEventListener(t, () => { if (S.sound === "1") audio(); }, true));
+
+/* ============ Display 1 ============ */
+const MODES = [
+  { k: "text", l: "TESTO", h: "ruota per scrivere" },
+  { k: "photo", l: "FOTO", h: "shift: scatta" },
+  { k: "scan", l: "SCANSIONE", h: "shift: scansiona" },
+  { k: "audio", l: "AUDIO", h: "shift: registra" },
+  { k: "file", l: "FILE", h: "shift: aggiungi" },
+];
+let msg = "", msgT = 0;
+function flash(t) { msg = t; clearTimeout(msgT); msgT = setTimeout(() => { msg = ""; d1(); }, 1800); d1(); }
+function d1() {
+  const m = MODES[S.mode];
+  let a = m.l;
+  if (view === "menu") a = "MENU";
+  else if (view === "detail") { const it = items[sel]; a = it ? it.name : ""; }
+  if (rec) a = "REC " + clock((performance.now() - rec.t0) / 1000);
+  if (msg) a = msg;
+  $("d1a").textContent = a;
+  $("d1").classList.toggle("meter", !!rec && !msg);
+}
+const clock = (s) => Math.floor(s / 60) + ":" + pad(Math.floor(s % 60));
+function setMode(dir) {
+  if (rec) { sound("stop"); return; }
+  S.mode = (S.mode + dir + MODES.length) % MODES.length; saveS(); sound("menu"); msg = ""; d1();
+}
+function msBtn(el, dir) {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); audio(); el.classList.add("down");
+    if (land) { moveCaret(dir, true); sound("browse"); } else setMode(dir);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((t) => el.addEventListener(t, () => el.classList.remove("down")));
+}
+msBtn($("prev"), -1); msBtn($("next"), 1);
+$("theme").addEventListener("click", () => { S.theme = S.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = S.theme; saveS(); drawDial(); drawStrip(); renderFeed(); if (view === "menu") renderMenu(); sound("set"); });
+$("d1").addEventListener("click", () => { audio(); if (land || rec) { sound("stop"); return; } view === "menu" ? closeView() : openMenu(); });
+
+/* ============ Display 2: feed, dettaglio, menu ============ */
+const feed = $("feed"), d2 = $("d2");
+let sel = 0, view = "feed";
+const urls = new Map();
+const urlOf = (it) => { if (!urls.has(it.name)) urls.set(it.name, URL.createObjectURL(it.blob)); return urls.get(it.name); };
+function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+function drawWave(cv, peaks, prog) {
+  const w = cv.clientWidth || 300, h = cv.clientHeight || 34; cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
+  const c = cv.getContext("2d"), ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
+  c.fillStyle = ink; const n = peaks && peaks.length ? peaks.length : 0, bw = cv.width / Math.max(n, 1);
+  for (let i = 0; i < n; i++) {
+    const v = Math.max(0.04, peaks[i]), bh = v * cv.height;
+    const x = Math.round(i * bw + bw * 0.2), bwi = Math.max(2, Math.round(bw * 0.6)), y = Math.round((cv.height - bh) / 2);
+    if (prog != null && i / n > prog) { c.strokeStyle = ink; c.lineWidth = DPR; c.strokeRect(x + DPR / 2, y + DPR / 2, bwi - DPR, Math.max(DPR, bh - DPR)); }
+    else c.fillRect(x, y, bwi, bh);
+  }
+  if (!n) c.fillRect(0, Math.round(cv.height / 2), cv.width, DPR);
+}
+function contentEl(it, full) {
+  const f = document.createDocumentFragment();
+  if (it.type === "text") { const d = document.createElement("div"); d.className = "tx"; d.textContent = it.text; f.appendChild(d); }
+  else if (it.type === "image") { const im = new Image(); im.src = urlOf(it); im.alt = ""; f.appendChild(im); }
+  else if (it.type === "audio") {
+    const cv = document.createElement("canvas"); cv.className = "wf"; f.appendChild(cv);
+    const d = document.createElement("div"); d.className = "fl"; d.textContent = it.dur ? clock(it.dur) : (it.orig || "audio"); f.appendChild(d);
+    requestAnimationFrame(() => drawWave(cv, it.peaks));
+  } else {
+    const d = document.createElement("div"); d.className = "fl"; d.textContent = (it.orig || it.name + "." + it.ext) + "  ·  " + fmtSize(it.blob ? it.blob.size : 0); f.appendChild(d);
+  }
+  return f;
+}
+function renderFeed(scroll) {
+  feed.innerHTML = "";
+  if (!items.length) { d1(); return; }
+  sel = Math.max(0, Math.min(items.length - 1, sel));
+  items.forEach((it, i) => {
+    const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : ""); el.dataset.i = i;
+    const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = it.name; el.appendChild(nm);
+    el.appendChild(contentEl(it)); feed.appendChild(el);
+  });
+  if (scroll) showSel(); d1();
+}
+function setSel(i) {
+  i = Math.max(0, Math.min(items.length - 1, i)); if (i === sel) return false;
+  const o = feed.children[sel]; if (o) o.classList.remove("sel");
+  sel = i; const n = feed.children[sel]; if (n) n.classList.add("sel"); showSel(); return true;
+}
+function showSel() {
+  const el = feed.children[sel]; if (!el) return;
+  const top = el.offsetTop, bot = top + el.offsetHeight, h = feed.clientHeight;
+  if (top < feed.scrollTop) feed.scrollTop = top; else if (bot > feed.scrollTop + h) feed.scrollTop = Math.min(top, bot - h);
+}
+feed.addEventListener("click", (e) => {
+  const el = e.target.closest(".it"); if (!el) return; const i = +el.dataset.i;
+  if (i === sel) openDetail(); else { setSel(i); sound("browse"); }
+});
+
+let player = null;
+function openDetail() {
+  const it = items[sel]; if (!it) return;
+  const dt = $("detail"); dt.innerHTML = ""; view = "detail"; d2.className = "box show-detail"; dt.scrollTop = 0;
+  if (it.type === "pdf") { const fr = document.createElement("iframe"); fr.src = urlOf(it); dt.style.padding = "0"; dt.appendChild(fr); }
+  else { dt.style.padding = ""; dt.appendChild(contentEl(it, true)); }
+  if (it.type === "audio") {
+    player = new Audio(urlOf(it)); player.play().catch(() => {});
+    const cv = dt.querySelector("canvas"), tl = dt.querySelector(".fl");
+    const upd = () => { if (!player) return; drawWave(cv, it.peaks, player.duration ? player.currentTime / player.duration : 0); tl.textContent = clock(player.currentTime) + " / " + clock(player.duration || it.dur || 0); if (!player.paused) requestAnimationFrame(upd); };
+    player.onplay = upd; player.onpause = upd; player.onseeked = upd; requestAnimationFrame(upd);
+  }
+  if (it.type === "file") {}
+  sound("set"); d1();
+}
+function closeView() {
+  if (player) { player.pause(); player = null; }
+  view = "feed"; d2.className = "box"; sound("menu"); d1();
+}
+
+/* Menu (FX): si apre toccando il Display 1 */
+let menuSel = 0, confirmKey = "";
+function menuRows() {
+  const it = items[sel], mon = it ? it.name.slice(0, 4) : ymd(new Date()).slice(0, 4);
+  return [
+    { k: "expM", l: "Esporta mese", v: "20" + mon.slice(0, 2) + "-" + mon.slice(2) },
+    { k: "expY", l: "Esporta anno", v: "20" + mon.slice(0, 2) },
+    { k: "expA", l: "Esporta tutto", v: String(items.length) },
+    { k: "imp", l: "Apri archivio ZIP", v: "" },
+    { k: "theme", l: "Tema", v: S.theme === "dark" ? "Scuro" : "Chiaro" },
+    { k: "sound", l: "Suono", v: S.sound === "1" ? "On" : "Off" },
+    { k: "del", l: "Elimina voce selezionata", v: confirmKey === "del" ? "Premi ancora" : (it ? it.name : "") },
+    { k: "clear", l: "Cancella tutto", v: confirmKey === "clear" ? "Premi ancora" : "" },
+  ];
+}
+function renderMenu() {
+  const m = $("menu"), rows = menuRows(); menuSel = Math.max(0, Math.min(rows.length - 1, menuSel));
+  m.innerHTML = rows.map((r, i) => '<div class="mrow' + (i === menuSel ? " sel" : "") + '" data-i="' + i + '"><span>' + r.l + '</span><span>' + r.v + "</span></div>").join("");
+}
+function openMenu() { if (player) { player.pause(); player = null; } view = "menu"; confirmKey = ""; d2.className = "box show-menu"; renderMenu(); sound("set"); d1(); }
+$("menu").addEventListener("click", (e) => { const r = e.target.closest(".mrow"); if (!r) return; audio(); menuSel = +r.dataset.i; renderMenu(); sound("browse"); menuDo(); });
+async function menuDo() {
+  const r = menuRows()[menuSel]; if (!r) return;
+  if ((r.k === "del" || r.k === "clear") && confirmKey !== r.k) { confirmKey = r.k; renderMenu(); sound("stop"); return; }
+  confirmKey = "";
+  const it = items[sel];
+  if (r.k === "expM" || r.k === "expY" || r.k === "expA") {
+    const pre = r.k === "expA" ? "" : (it ? it.name : ymd(new Date())).slice(0, r.k === "expM" ? 4 : 2);
+    await exportZip(items.filter((x) => x.name.startsWith(pre)), "JRN-1_" + (pre || "tutto") + ".zip");
+    sound("act");
+  } else if (r.k === "imp") { sound("set"); $("fzip").click(); }
+  else if (r.k === "theme") { S.theme = S.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = S.theme; saveS(); drawDial(); drawStrip(); renderFeed(); sound("set"); }
+  else if (r.k === "sound") { S.sound = S.sound === "1" ? "0" : "1"; saveS(); if (S.sound === "1") { audio(); sound("set"); } }
+  else if (r.k === "del" && it) { await dbDel(it.name); items.splice(sel, 1); renderFeed(); flash("Eliminato " + it.name); sound("act"); }
+  else if (r.k === "clear") { await dbClear(); items = []; sel = 0; renderFeed(); flash("Archivio interno vuoto"); sound("act"); }
+  renderMenu();
+}
+
+/* ============ Cattura ============ */
+const fin = $("fin");
+function pick(accept, capture) {
+  fin.value = ""; fin.accept = accept || ""; fin.multiple = !capture;
+  if (capture) fin.setAttribute("capture", "environment"); else fin.removeAttribute("capture");
+  fin.click();
+}
+fin.addEventListener("change", async () => {
+  const files = [...fin.files]; if (!files.length) return;
+  const m = MODES[S.mode].k;
+  for (const f of files) {
+    try {
+      if (m === "scan") { const b = await scanFilter(f); await addItem({ type: "image", ext: "jpg", mime: "image/jpeg", blob: b }); }
+      else await addFile(f);
+    } catch (e) { flash("Errore: " + (e.message || e)); }
+  }
+});
+async function addFile(f, name, created) {
+  const ext = extOf(f.name) || (f.type.split("/")[1] || "bin"), type = typeOf(ext, f.type);
+  const it = { name, created, type, ext, mime: f.type || MIME[ext] || "application/octet-stream", orig: f.name || "" };
+  if (type === "text") it.text = await f.text(); else it.blob = f;
+  if (type === "audio") { const p = await peaksOf(f); if (p) { it.peaks = p.peaks; it.dur = p.dur; } }
+  return addItem(it);
+}
+async function peaksOf(blob) {
+  try {
+    const a = audio(); if (!a) return null;
+    const buf = await new Promise((res, rej) => blob.arrayBuffer().then((ab) => a.decodeAudioData(ab, res, rej)));
+    const d = buf.getChannelData(0), n = 64, st = Math.floor(d.length / n), out = [];
+    for (let i = 0; i < n; i++) { let m = 0; for (let j = i * st; j < (i + 1) * st; j += 16) m = Math.max(m, Math.abs(d[j])); out.push(m); }
+    const mx = Math.max(...out, 0.01); return { peaks: out.map((v) => +(v / mx).toFixed(2)), dur: buf.duration };
+  } catch (e) { return null; }
+}
+/* Scansione leggera: scala di grigi e carta bianca, niente modelli */
+async function scanFilter(f) {
+  const bm = await createImageBitmap(f), k = Math.min(1, 2000 / Math.max(bm.width, bm.height));
+  const w = Math.round(bm.width * k), h = Math.round(bm.height * k), cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const c = cv.getContext("2d"); c.drawImage(bm, 0, 0, w, h); const im = c.getImageData(0, 0, w, h), d = im.data, hist = new Uint32Array(256);
+  for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) | 0; d[i] = y; hist[y]++; }
+  const tot = w * h; let lo = 0, hi = 255, acc = 0;
+  for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > tot * 0.02) { lo = i; break; } }
+  acc = 0; for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > tot * 0.6) { hi = i; break; } }
+  const rg = Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, ((d[i] - lo) / rg) * 255)); d[i] = d[i + 1] = d[i + 2] = v; }
+  c.putImageData(im, 0, 0);
+  return new Promise((res) => cv.toBlob(res, "image/jpeg", 0.85));
+}
+
+/* Registrazione audio con visualizzazione sul Display 1 */
+let rec = null;
+async function recStart() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "audio/webm";
+    const mr = new MediaRecorder(stream, { mimeType: mime }), chunks = [];
+    const a = audio(), src = a.createMediaStreamSource(stream), an = a.createAnalyser(); an.fftSize = 1024; src.connect(an);
+    rec = { mr, stream, an, chunks, mime, t0: performance.now(), peaks: [], buf: new Float32Array(an.fftSize), last: 0 };
+    mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    mr.start(250); $("led").className = "led rec"; sound("act"); meter();
+  } catch (e) { rec = null; flash("Microfono non disponibile"); sound("stop"); }
+}
+function recStop() {
+  const r = rec; if (!r) return; rec = null;
+  r.mr.onstop = async () => {
+    r.stream.getTracks().forEach((t) => t.stop());
+    const blob = new Blob(r.chunks, { type: r.mime }), dur = (performance.now() - r.t0) / 1000;
+    const n = 64, p = r.peaks, out = [];
+    for (let i = 0; i < n; i++) { const s = p.slice(Math.floor((i * p.length) / n), Math.floor(((i + 1) * p.length) / n) || 1); out.push(s.length ? Math.max(...s) : 0); }
+    const mx = Math.max(...out, 0.01);
+    await addItem({ type: "audio", ext: r.mime === "audio/mp4" ? "m4a" : "webm", mime: r.mime, blob, dur, peaks: out.map((v) => +(v / mx).toFixed(2)) });
+  };
+  r.mr.stop(); $("led").className = "led"; d1();
+}
+const d1c = $("d1c");
+function meter() {
+  if (!rec) { d1(); return; }
+  const r = rec; r.an.getFloatTimeDomainData(r.buf); let m = 0; for (const v of r.buf) m = Math.max(m, Math.abs(v));
+  r.peaks.push(m);
+  const w = d1c.clientWidth, h = d1c.clientHeight; if (d1c.width !== Math.round(w * DPR)) { d1c.width = Math.round(w * DPR); d1c.height = Math.round(h * DPR); }
+  const c = d1c.getContext("2d"), cs = getComputedStyle(document.documentElement);
+  c.clearRect(0, 0, d1c.width, d1c.height);
+  const x0 = Math.round(d1c.width * 0.52), bw = 3 * DPR, n = Math.floor((d1c.width - x0 - 12 * DPR) / bw);
+  c.fillStyle = cs.getPropertyValue("--ink").trim();
+  const tail = r.peaks.slice(-n);
+  tail.forEach((v, i) => { const bh = Math.max(DPR, Math.min(1, v * 1.6) * d1c.height * 0.7); c.fillRect(x0 + i * bw, (d1c.height - bh) / 2, bw - DPR, bh); });
+  if (performance.now() - r.last > 250) { r.last = performance.now(); $("d1a").textContent = "REC " + clock((performance.now() - r.t0) / 1000); }
+  requestAnimationFrame(meter);
+}
+
+/* ============ Shift ============ */
+const shiftB = $("shift"); let shId = null, shT = 0, shUsed = false;
+shiftB.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); try { shiftB.setPointerCapture(e.pointerId); } catch (_) {} audio();
+  shId = e.pointerId; shT = performance.now(); shUsed = false; shiftB.classList.add("down"); sound("set");
+});
+function shUp(e) {
+  if (shId !== e.pointerId) return; shId = null; shiftB.classList.remove("down");
+  if (!shUsed && performance.now() - shT < 400) shiftTap();
+}
+shiftB.addEventListener("pointerup", shUp); shiftB.addEventListener("pointercancel", shUp);
+const shiftHeld = () => shId !== null;
+function shiftTap() {
+  if (land) { saveDraft(); return; }
+  if (view === "menu") { menuDo(); return; }
+  if (view === "detail") { const it = items[sel]; if (it && it.blob) shareFiles([new File([it.blob], it.name + "." + it.ext, { type: it.mime })]); return; }
+  const m = MODES[S.mode].k;
+  if (m === "text") { if (draft.text.trim()) saveDraft(); else { sound("stop"); } }
+  else if (m === "photo") pick("image/*", true);
+  else if (m === "scan") pick("image/*", true);
+  else if (m === "audio") rec ? recStop() : recStart();
+  else if (m === "file") pick("image/*,audio/*,text/plain,.txt,.md,application/pdf,.pdf,*/*", false);
+}
+
+/* ============ Ghiera (verticale) ============ */
+const dial = $("dial"), dctx = dial.getContext("2d");
+const D = { size: 180, rot: 0, acc: 0, id: null, center: false, moved: false, lastA: 0 };
+const DETENT = Math.PI / 12;
+const ink = () => getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
+function drawDial() {
+  const s0 = D.size, px = Math.round(s0 * DPR);
+  if (dial.width !== px) { dial.width = px; dial.height = px; dial.style.width = s0 + "px"; dial.style.height = s0 + "px"; }
+  const c = dctx, R = px / 2, lw = Math.max(1, DPR);
+  c.clearRect(0, 0, px, px); c.lineWidth = lw; c.strokeStyle = ink(); c.fillStyle = ink();
+  c.beginPath(); c.arc(R, R, R - lw / 2, 0, Math.PI * 2); c.stroke();
+  for (const k of [0, Math.PI]) { const a = D.rot + k - Math.PI / 2 - Math.PI / 4, rr = R * 0.82; c.beginPath(); c.arc(R + Math.cos(a) * rr, R + Math.sin(a) * rr, R * 0.035, 0, Math.PI * 2); c.fill(); }
+}
+function dialPos(e) { const b = dial.getBoundingClientRect(); const x = e.clientX - b.left - b.width / 2, y = e.clientY - b.top - b.height / 2; return { r: Math.hypot(x, y) / (b.width / 2), a: Math.atan2(y, x) }; }
+function step(dir) {
+  if (view === "menu") { const n = menuRows().length, j = menuSel + dir; if (j < 0 || j >= n) return false; menuSel = j; confirmKey = ""; renderMenu(); return true; }
+  if (view === "detail") {
+    if (player && player.duration) { player.currentTime = Math.max(0, Math.min(player.duration, player.currentTime + dir * 2)); return true; }
+    const dt = $("detail"), o = dt.scrollTop; dt.scrollTop += dir * 44; return dt.scrollTop !== o;
+  }
+  if (shiftHeld()) {                          // shift + ghiera: salta di giorno in giorno
+    shUsed = true; const day = (items[sel] || {}).name.slice(0, 6); let i = sel;
+    while (i + dir >= 0 && i + dir < items.length && items[i].name.slice(0, 6) === day) i += dir;
+    return setSel(i);
+  }
+  return setSel(sel + dir);
+}
+dial.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); dial.setPointerCapture(e.pointerId); audio();
+  const p = dialPos(e); D.id = e.pointerId; D.moved = false; D.acc = 0; D.lastA = p.a; D.center = p.r < 0.36;
+});
+dial.addEventListener("pointermove", (e) => {
+  if (D.id !== e.pointerId || D.center) return;
+  const p = dialPos(e); let da = p.a - D.lastA; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
+  D.lastA = p.a; D.acc += da; D.rot += da;
+  if (!D.moved && Math.abs(D.acc) > 0.17) D.moved = true;
+  if (D.moved) while (Math.abs(D.acc) >= DETENT) { const dir = D.acc > 0 ? 1 : -1; D.acc -= dir * DETENT; if (step(dir)) sound("browse"); else { sound("stop"); D.acc = 0; break; } }
+  drawDial();
+});
+function dialUp(e) {
+  if (D.id !== e.pointerId) return; D.id = null;
+  if (D.center) { if (view === "menu") menuDo(); else if (view === "detail") closeView(); else if (items.length) openDetail(); }
+}
+dial.addEventListener("pointerup", dialUp); dial.addEventListener("pointercancel", dialUp);
+
+/* ============ Tastiera custom (orizzontale) ============ */
+const draft = { text: store.get("jrn1-draft", ""), caret: 0 }; draft.caret = draft.text.length;
+let kbPage = "abc", caps = 0, lastShiftT = 0;   // caps: 0 off, 1 una volta, 2 bloccato
+const PAGES = {
+  abc: [["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], ["a", "s", "d", "f", "g", "h", "j", "k", "l", "'"], ["⇧", "z", "x", "c", "v", "b", "n", "m", ",", "⌫"], ["123", "☺", " ", "⏎"]],
+  num: [["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"], ["à", "è", "é", "ì", "ò", "ù", "-", "/", ":", ";"], ["#+=", ".", "?", "!", "(", ")", "\"", "@", "€", "⌫"], ["ABC", "☺", " ", "⏎"]],
+  sym: [["[", "]", "{", "}", "#", "%", "^", "*", "+", "="], ["_", "\\", "|", "~", "<", ">", "£", "&", "°", "…"], ["123", "•", "§", "→", "←", "✓", "×", "÷", "±", "⌫"], ["ABC", "☺", " ", "⏎"]],
+  emo: [["😀", "😂", "😊", "😍", "🤔", "😴", "😢", "😡", "👍", "🙏"], ["❤️", "🔥", "✨", "✅", "❌", "⭐", "☕", "🎵", "📌", "💡"], ["123", "📅", "⏰", "📷", "🎤", "📎", "→", "←", "✓", "⌫"], ["ABC", "☺", " ", "⏎"]],
+};
+const WIDE = { "⇧": "w15", "⌫": "w15", "123": "w15", "ABC": "w15", "#+=": "w15", "⏎": "w15", " ": "w6" };
+const kb = $("kb");
+function renderKb() {
+  kb.innerHTML = "";
+  PAGES[kbPage].forEach((row) => {
+    const r = document.createElement("div"); r.className = "kr";
+    row.forEach((k) => {
+      const b = document.createElement("div"); b.className = "k " + (WIDE[k] || "") + (k.length > 1 && !/\p{Extended_Pictographic}/u.test(k) ? " fn" : "");
+      b.dataset.k = k;
+      b.textContent = k === " " ? "" : (kbPage === "abc" && caps && k.length === 1 && /[a-z]/.test(k) ? k.toUpperCase() : k);
+      if (k === "⇧" && caps) b.classList.add("lit"); if (k === "⇧" && caps === 2) b.textContent = "⇪";
+      r.appendChild(b);
+    });
+    kb.appendChild(r);
+  });
+}
+let bsRep = 0;
+kb.addEventListener("pointerdown", (e) => {
+  const b = e.target.closest(".k"); if (!b) return; e.preventDefault(); audio();
+  b.classList.add("down"); const k = b.dataset.k; sound("key");
+  keyPress(k);
+  if (k === "⌫") { clearInterval(bsRep); bsRep = setTimeout(function rep() { keyPress("⌫"); sound("key"); bsRep = setTimeout(rep, 60); }, 420); }
+  const up = () => { b.classList.remove("down"); clearTimeout(bsRep); };
+  b.addEventListener("pointerup", up, { once: true }); b.addEventListener("pointercancel", up, { once: true }); b.addEventListener("pointerleave", up, { once: true });
+});
+function autoCaps() { const t = draft.text.slice(0, draft.caret); return !t.trim() || /[.!?\n]\s*$/.test(t) && /\s$|\n$/.test(t) || /\n$/.test(t); }
+function insert(s) { draft.text = draft.text.slice(0, draft.caret) + s + draft.text.slice(draft.caret); draft.caret += s.length; }
+function keyPress(k) {
+  if (k === "⇧") { const now = performance.now(); caps = caps ? (now - lastShiftT < 320 && caps === 1 ? 2 : 0) : 1; lastShiftT = now; renderKb(); return; }
+  if (k === "123") { kbPage = "num"; renderKb(); return; }
+  if (k === "ABC") { kbPage = "abc"; renderKb(); return; }
+  if (k === "#+=") { kbPage = "sym"; renderKb(); return; }
+  if (k === "☺") { kbPage = kbPage === "emo" ? "abc" : "emo"; renderKb(); return; }
+  if (k === "⌫") {
+    if (draft.caret > 0) { const s = [...draft.text.slice(0, draft.caret)]; const last = s.pop() || ""; draft.text = s.join("") + draft.text.slice(draft.caret); draft.caret -= last.length; }
+  } else if (k === "⏎") insert("\n");
+  else if (k === " ") { if (kbPage !== "abc" && kbPage !== "emo") kbPage = "abc"; insert(" "); }
+  else { let ch = k; if (kbPage === "abc" && caps && /^[a-z]$/.test(k)) ch = k.toUpperCase(); insert(ch); if (caps === 1) caps = 0; }
+  if (kbPage === "abc" && caps !== 2) caps = autoCaps() ? 1 : 0;
+  renderKb(); renderEd();
+}
+const ed = $("ed");
+function esc(s) { return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+function renderEd() {
+  store.set("jrn1-draft", draft.text);
+  const vis = (s) => esc(s).replace(/\n/g, "↵");          // una sola riga: gli a capo si vedono come ↵
+  ed.innerHTML = '<span id="edl">' + vis(draft.text.slice(0, draft.caret)) + '<span class="car"></span>' + vis(draft.text.slice(draft.caret)) + "</span>";
+  const c = ed.querySelector(".car"), pad = 12; if (c) { const x = c.offsetLeft, w = ed.clientWidth; if (x - ed.scrollLeft > w - pad * 2) ed.scrollLeft = x - w + pad * 3; else if (x - ed.scrollLeft < pad) ed.scrollLeft = Math.max(0, x - pad * 3); }
+}
+function moveCaret(dir, word) {
+  const t = draft.text; let c = draft.caret;
+  if (word) { if (dir > 0) { while (c < t.length && /\s/.test(t[c])) c++; while (c < t.length && !/\s/.test(t[c])) c++; } else { while (c > 0 && /\s/.test(t[c - 1])) c--; while (c > 0 && !/\s/.test(t[c - 1])) c--; } }
+  else c = Math.max(0, Math.min(t.length, c + dir));
+  if (c === draft.caret) return false; draft.caret = c; renderEd(); return true;
+}
+async function saveDraft() {
+  if (!draft.text.trim()) { flash("Niente da salvare"); sound("stop"); return; }
+  await addItem({ type: "text", ext: "txt", mime: "text/plain", text: draft.text });
+  draft.text = ""; draft.caret = 0; caps = 1; renderKb(); renderEd();
+}
+
+/* Striscia (la ghiera in orizzontale): sposta il cursore, con shift tenuto salta di parola */
+const strip = $("strip"), sctx = strip.getContext("2d"); let stOff = 0, stId = null, stLast = 0, stAcc = 0;
+function drawStrip() {
+  const w = strip.clientWidth, h = strip.clientHeight; if (!w) return;
+  if (strip.width !== Math.round(w * DPR)) { strip.width = Math.round(w * DPR); strip.height = Math.round(h * DPR); }
+  const c = sctx, W = strip.width, H = strip.height, gap = W / 2, r = 2.5 * DPR;   // al massimo 2 puntini visibili, scorrono col dito
+  c.clearRect(0, 0, W, H); c.fillStyle = ink();
+  for (let x = ((stOff * DPR) % gap + gap) % gap; x < W; x += gap) if (x > r * 3 && x < W - r * 3) { c.beginPath(); c.arc(x, H / 2, r, 0, Math.PI * 2); c.fill(); }
+}
+strip.addEventListener("pointerdown", (e) => { e.preventDefault(); strip.setPointerCapture(e.pointerId); audio(); stId = e.pointerId; stLast = e.clientX; stAcc = 0; });
+strip.addEventListener("pointermove", (e) => {
+  if (stId !== e.pointerId) return; const dx = e.clientX - stLast; stLast = e.clientX; stOff += dx; stAcc += dx;
+  const STEP = shiftHeld() ? 22 : 12;
+  while (Math.abs(stAcc) >= STEP) { const dir = stAcc > 0 ? 1 : -1; stAcc -= dir * STEP; if (shiftHeld()) shUsed = true; if (moveCaret(dir, shiftHeld())) sound("detent"); else { sound("stop"); stAcc = 0; break; } }
+  drawStrip();
+});
+["pointerup", "pointercancel"].forEach((t) => strip.addEventListener(t, () => (stId = null)));
+
+/* ============ ZIP: scrittura e lettura, tutto sul telefono ============ */
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u) { let c = ~0; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return ~c >>> 0; }
+function dos(ms) { const d = new Date(ms); return { time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate() }; }
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], cd = []; let off = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.name), d = f.data, crc = crc32(d), { time, date } = dos(f.date || Date.now());
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(10, time, true); h.setUint16(12, date, true);
+    h.setUint32(14, crc, true); h.setUint32(18, d.length, true); h.setUint32(22, d.length, true); h.setUint16(26, nm.length, true);
+    parts.push(h.buffer, nm, d);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(12, time, true); c.setUint16(14, date, true);
+    c.setUint32(16, crc, true); c.setUint32(20, d.length, true); c.setUint32(24, d.length, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+    cd.push(c.buffer, nm); off += 30 + nm.length + d.length;
+  }
+  const cdSize = cd.reduce((s, b) => s + b.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cdSize, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, e.buffer], { type: "application/zip" });
+}
+async function readZip(blob) {
+  const b = new Uint8Array(await blob.arrayBuffer()), v = new DataView(b.buffer), dec = new TextDecoder(); let e = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) if (v.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error("non è uno ZIP");
+  const n = v.getUint16(e + 10, true), out = []; let p = v.getUint32(e + 16, true);
+  for (let k = 0; k < n; k++) {
+    const method = v.getUint16(p + 10, true), time = v.getUint16(p + 12, true), date = v.getUint16(p + 14, true), cs = v.getUint32(p + 20, true);
+    const nl = v.getUint16(p + 28, true), xl = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true), lo = v.getUint32(p + 42, true);
+    const name = dec.decode(b.subarray(p + 46, p + 46 + nl)); p += 46 + nl + xl + cl;
+    if (name.endsWith("/") || name.includes("__MACOSX") || /(^|\/)\./.test(name)) continue;
+    const st = lo + 30 + v.getUint16(lo + 26, true) + v.getUint16(lo + 28, true), raw = b.subarray(st, st + cs);
+    let data;
+    if (method === 0) data = raw;
+    else if (method === 8 && window.DecompressionStream) data = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    else continue;
+    const dt = new Date(((date >> 9) & 127) + 1980, ((date >> 5) & 15) - 1, date & 31, time >> 11, (time >> 5) & 63, (time & 31) * 2);
+    out.push({ name, data, date: dt.getTime() });
+  }
+  return out;
+}
+async function exportZip(list, fname) {
+  if (!list.length) { flash("Niente da esportare"); sound("stop"); return; }
+  flash("Preparo " + fname); const enc = new TextEncoder(), files = [], index = [];
+  for (const it of [...list].reverse()) {
+    const fn = it.name + "." + it.ext;
+    files.push({ name: fn, data: it.type === "text" ? enc.encode(it.text) : new Uint8Array(await it.blob.arrayBuffer()), date: it.created });
+    index.push({ file: fn, type: it.type, created: it.created, orig: it.orig || undefined, dur: it.dur, peaks: it.peaks });
+  }
+  files.push({ name: "index.json", data: enc.encode(JSON.stringify({ app: "JRN-1", v: 1, items: index }, null, 1)), date: Date.now() });
+  await shareFiles([new File([makeZip(files)], fname, { type: "application/zip" })]);
+}
+async function shareFiles(files) {
+  try { if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  files.forEach((f, i) => setTimeout(() => { const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }, i * 400));
+}
+$("fzip").addEventListener("change", async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  try {
+    const ents = await readZip(f); let meta = {};
+    const ix = ents.find((x) => x.name.split("/").pop() === "index.json");
+    if (ix) try { for (const m of JSON.parse(new TextDecoder().decode(ix.data)).items || []) meta[m.file] = m; } catch (e) {}
+    let added = 0, skipped = 0;
+    for (const x of ents) {
+      const base = x.name.split("/").pop(); if (base === "index.json") continue;
+      const ext = extOf(base), stem = base.slice(0, base.length - ext.length - (ext ? 1 : 0)), m = meta[base] || {};
+      let name = parseName(stem) ? stem : null;
+      if (name && items.some((i) => i.name === name)) { skipped++; continue; }
+      const created = m.created || x.date;
+      const it = { name: name || nextName(new Date(created)), created, ext: ext || "bin", mime: MIME[ext] || "application/octet-stream", orig: m.orig || (name ? undefined : base) };
+      it.type = m.type || typeOf(ext, it.mime);
+      if (it.type === "text") it.text = new TextDecoder().decode(x.data); else it.blob = new Blob([x.data], { type: it.mime });
+      if (it.type === "audio") { if (m.peaks) { it.peaks = m.peaks; it.dur = m.dur; } else { const p = await peaksOf(it.blob); if (p) Object.assign(it, p); } }
+      await dbPut(it); items.push(it); added++;
+    }
+    sortItems(); renderFeed(true); closeView(); flash("Archivio: " + added + " nuove" + (skipped ? ", " + skipped + " già presenti" : "")); sound("act");
+  } catch (e) { flash("ZIP non leggibile: " + (e.message || e)); sound("stop"); }
+});
+
+/* ============ Layout: verticale fisso, orizzontale = tastiera ============ */
+let land = false;
+function layout() {
+  const w = window.innerWidth, h = window.innerHeight, L = w > h && h < 520;
+  if (L !== land) { land = L; document.body.classList.toggle("land", land); if (land) { if (view !== "feed") closeView(); kbPage = "abc"; caps = autoCaps() ? 1 : 0; renderKb(); renderEd(); } }
+  if (!land) {
+    const app = $("app"), W = app.clientWidth;
+    D.size = Math.max(150, Math.min(214, Math.floor(W * 0.56), Math.floor(app.clientHeight * 0.27)));
+    shiftB.style.height = D.size + "px";
+    drawDial();
+  } else { shiftB.style.height = ""; drawStrip(); renderEd(); }
+  d1();
+}
+window.addEventListener("resize", () => setTimeout(layout, 60));
+window.addEventListener("orientationchange", () => setTimeout(layout, 250));
+if (window.visualViewport) visualViewport.addEventListener("resize", () => setTimeout(layout, 60));
+document.addEventListener("keydown", (e) => {     // anteprima sul Mac
+  if (land) { if (e.key.length === 1) keyPress(e.key === " " ? " " : e.key); else if (e.key === "Backspace") keyPress("⌫"); else if (e.key === "Enter") keyPress("⏎"); else if (e.key === "ArrowLeft") moveCaret(-1); else if (e.key === "ArrowRight") moveCaret(1); return; }
+  if (e.key === "ArrowDown") step(1); else if (e.key === "ArrowUp") step(-1); else if (e.key === "Enter") view === "detail" ? closeView() : openDetail(); else if (e.key === "Escape") closeView();
+});
+
+/* ============ Avvio ============ */
+async function demo() {                        // voci di esempio solo al primissimo avvio
+  const now = new Date(), d0 = ymd(now), y = new Date(now - 864e5), d1s = ymd(y);
+  const cv = document.createElement("canvas"); cv.width = 900; cv.height = 600; const c = cv.getContext("2d");
+  c.fillStyle = "#f4f1ea"; c.fillRect(0, 0, 900, 600); c.strokeStyle = "#333"; c.lineWidth = 3; c.lineCap = "round";
+  for (let i = 0; i < 14; i++) { c.beginPath(); c.moveTo(120 + Math.random() * 200, 100 + i * 30); c.bezierCurveTo(300, 80 + i * 32, 500, 140 + i * 25, 700 + Math.random() * 100, 120 + i * 28); c.stroke(); }
+  c.strokeRect(150, 380, 260, 150); c.beginPath(); c.arc(640, 450, 80, 0, 7); c.stroke();
+  const img = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.8));
+  const list = [
+    { name: d1s + "_1", type: "text", ext: "txt", mime: "text/plain", text: "Idea: un archivio unico per mese, uno ZIP che si apre ovunque.", created: +y - 3600e3 },
+    { name: d1s + "_2", type: "image", ext: "jpg", mime: "image/jpeg", blob: img, created: +y },
+    { name: d0 + "_1", type: "text", ext: "txt", mime: "text/plain", text: "Giornata lunga. Domani chiamare per lo studio alle 10.\nRicordarsi di portare i disegni.", created: +now - 7200e3 },
+    { name: d0 + "_2", type: "audio", ext: "m4a", mime: "audio/mp4", blob: new Blob([], { type: "audio/mp4" }), dur: 42, peaks: Array.from({ length: 64 }, (_, i) => +(0.25 + 0.7 * Math.abs(Math.sin(i * 0.37) * Math.cos(i * 0.11))).toFixed(2)), created: +now - 3600e3 },
+  ];
+  for (const it of list) { await dbPut(it); items.push(it); }
+}
+(async () => {
+  try { db = await idb(); items = await dbAll(); if (!items.length && store.get("jrn1-demo", "") !== "1") { store.set("jrn1-demo", "1"); await demo(); } }
+  catch (e) { flash("Memoria non disponibile"); }
+  sortItems(); layout(); renderFeed(true);
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});   // chiede di non cancellare i dati
+})();
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost"))
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
+let reloaded = false;
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
+</script>
+</body>
+</html>

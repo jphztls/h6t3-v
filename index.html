@@ -47,7 +47,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .it:first-child { border-top: 0; }
 .it .nm { display: inline-block; padding: 0 3px; margin: 0 -3px 4px; font-variant-numeric: tabular-nums; }
 .it.sel .nm { outline: var(--border-hairline) solid var(--line); outline-offset: 0; }   /* scelta: solo un contorno 1px */
-.it.same { border-top: 0; background: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 2px) top left / 100% 1px no-repeat; }   /* stesso giorno: tratteggio 1px 1px */
+.it.same { border-top: 0; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 4px) top left / 100% 1px no-repeat; }   /* stesso giorno: tratteggio 2px 2px */
 .it .tx { white-space: pre-wrap; word-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .it img { display: block; width: 100%; max-height: 260px; object-fit: contain; object-position: left center; }
 .it canvas.wf { display: block; width: 100%; height: 34px; }
@@ -70,7 +70,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .cal-n { margin-top: var(--space-3); white-space: pre-wrap; }
 #dirs .dr { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); border: var(--border-hairline) solid transparent; }
 #dirs .dr.sel { border-color: var(--line); }
-.it .hd { display: flex; gap: var(--space-3); align-items: baseline; }
+.it .hd { display: flex; gap: var(--space-3); align-items: baseline; justify-content: space-between; }
 
 /* Mirino */
 #cam video, #cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -343,17 +343,16 @@ function filteredUrl(it, k) {
   return fcache.get(key);
 }
 function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
-function drawWave(cv, peaks, prog) {          // forma d'onda: contorno 1px; la parte già ascoltata è piena
+function drawWave(cv, peaks, prog) {          // barre verticali da 1px distanziate 1px; in ascolto una linea indica la posizione
   const w = cv.clientWidth || 300, h = cv.clientHeight || 34; cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
-  const c = cv.getContext("2d"), col = ink(), W = cv.width, H = cv.height, mid = H / 2; c.fillStyle = col; c.strokeStyle = col; c.lineWidth = DPR;
-  const n = peaks && peaks.length ? peaks.length : 0;
-  if (n < 2) { c.fillRect(0, Math.round(mid), W, DPR); return; }
-  const X = (i) => DPR / 2 + (i / (n - 1)) * (W - DPR), A = (i) => Math.max(DPR, peaks[i] * (H / 2 - DPR));
-  c.beginPath(); c.moveTo(X(0), mid - A(0));
-  for (let i = 1; i < n; i++) c.lineTo(X(i), mid - A(i));
-  for (let i = n - 1; i >= 0; i--) c.lineTo(X(i), mid + A(i));
-  c.closePath(); c.stroke();
-  if (prog) { c.save(); c.beginPath(); c.rect(0, 0, W * prog, H); c.clip(); c.beginPath(); c.moveTo(X(0), mid - A(0)); for (let i = 1; i < n; i++) c.lineTo(X(i), mid - A(i)); for (let i = n - 1; i >= 0; i--) c.lineTo(X(i), mid + A(i)); c.closePath(); c.fill(); c.restore(); }
+  const c = cv.getContext("2d"), W = cv.width, H = cv.height, px = Math.max(1, Math.round(DPR)); c.fillStyle = ink();
+  const n = peaks && peaks.length ? peaks.length : 0, bars = Math.floor(W / (2 * px));
+  for (let j = 0; j < bars; j++) {
+    let v = 0;
+    if (n) { const f = (j / Math.max(1, bars - 1)) * (n - 1), i = Math.floor(f), t = f - i; v = peaks[i] * (1 - t) + (peaks[Math.min(n - 1, i + 1)] || 0) * t; }
+    const bh = Math.max(px, Math.round(v * H)); c.fillRect(j * 2 * px, Math.round((H - bh) / 2), px, bh);
+  }
+  if (prog != null && prog > 0) { const x = Math.min(W - px, Math.round(prog * W)); c.clearRect(x - px, 0, px * 3, H); c.fillRect(x, 0, px, H); }
 }
 function partEl(it, k, full) {
   const p = parts(it)[k], d = document.createElement("div"); d.className = "part";

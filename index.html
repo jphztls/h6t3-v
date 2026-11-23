@@ -49,9 +49,10 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .it.sel .nm, .it.sel .ti { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }   /* nota corrente: titolo sottolineato */
 .it .ti { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .it .hd .l { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.ic { display: inline-block; flex: none; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; }   /* icona del tipo di cartella, allineata al nome */
+.ic { display: inline-block; flex: none; width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px; }   /* icona del tipo di cartella, a destra del nome */
 .ic svg { display: block; width: 12px; height: 12px; overflow: visible; }
-.ic path, .ic rect { fill: none; stroke: var(--ink); stroke-width: 1; }
+.ic path, .ic rect, .ic circle { fill: none; stroke: var(--ink); stroke-width: 1; }
+.ic circle.on { stroke: none; }
 .ic .on { fill: var(--ink); }
 .it .fd { flex: none; white-space: nowrap; }
 .it .imgs { display: flex; flex-wrap: wrap; gap: 6px; }   /* feed: immagini piccole, affiancate */
@@ -67,6 +68,9 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #detail img { display: block; width: 100%; height: auto; }
 :root[data-theme="dark"] img.inv { filter: invert(1); }   /* scansioni in grigio/BN: bianco su nero col tema scuro */
 #detail canvas.wf { display: block; width: 100%; height: 80px; }
+.part.au { display: flex; align-items: center; gap: var(--space-2); }   /* durata a destra della forma d'onda */
+.part.au canvas.wf { flex: 1; min-width: 0; width: auto; }
+.part.au .fl { flex: none; font-variant-numeric: tabular-nums; }
 #detail .part + .part { margin-top: var(--space-3); }
 #detail .part.ro { outline: var(--border-hairline) solid var(--line); outline-offset: 3px; }   /* ordine pagine: pagina scelta */
 #detail iframe { width: 100%; height: 70vh; border: 0; background: #fff; }
@@ -420,7 +424,7 @@ function partEl(it, k, full) {
     else im.src = urlOf(it, k);
   }
   else if (p.type === "audio") {
-    const cv = document.createElement("canvas"); cv.className = "wf"; d.appendChild(cv);
+    const cv = document.createElement("canvas"); cv.className = "wf"; d.appendChild(cv); d.classList.add("au");
     const t = document.createElement("div"); t.className = "fl"; t.textContent = p.dur ? clock(p.dur) : (p.orig || "audio"); d.appendChild(t);
     d.dataset.k = k; requestAnimationFrame(() => drawWave(cv, p.peaks));
   } else if (p.type === "pdf" && full) { const fr = document.createElement("iframe"); fr.src = urlOf(it, k); d.appendChild(fr); }
@@ -448,7 +452,7 @@ const ICONS = {                                  // 12px, linee da 1px
   generica: '<path d="M.5 2.5h4l1.5 1.5h5.5v6.5H.5z"/>',
   tasklist: '<rect x=".5" y=".5" width="11" height="11"/>',
   tasklistOn: '<rect class="on" x=".5" y=".5" width="11" height="11"/>',
-  calendar: '<path d="M6 1.5c-2 0-3.2 1.5-3.2 3.6v2.6L1.5 9.5h9L9.2 7.7V5.1C9.2 3 8 1.5 6 1.5zM4.8 11h2.4"/><path d="M.8 3.2C.3 4 .3 6 .8 6.8M11.2 3.2c.5.8.5 2.8 0 3.6"/>',
+  calendar: '<circle class="on" cx="6" cy="6" r="1.8"/><path d="M3.3 2.8c-1.6 1.8-1.6 4.6 0 6.4M8.7 2.8c1.6 1.8 1.6 4.6 0 6.4M1.3 1c-2.4 2.8-2.4 7.2 0 10M10.7 1c2.4 2.8 2.4 7.2 0 10"/>',   // ((•)) come l'allarme dei Casio
 };
 function iconEl(type, on) { const s = document.createElement("span"); s.className = "ic" + (type === "tasklist" ? " ck" : ""); s.innerHTML = '<svg viewBox="0 0 12 12">' + ICONS[type === "tasklist" && on ? "tasklistOn" : type] + "</svg>"; return s; }
 const titleOf = (it) => (it.type === "text" && it.text ? it.text.split("\n")[0].trim() : "");
@@ -459,7 +463,7 @@ function fillHd(hd, it) {                       // intestazione: nome [titolo] [
   const ttl = titleOf(it); if (ttl) { const e = document.createElement("span"); e.className = "ti"; e.textContent = ttl; l.appendChild(e); }
   if (t === "calendar" && it.when) { const e = document.createElement("span"); e.className = "ev"; e.textContent = fmtWhen(it.when); l.appendChild(e); }
   const fd = document.createElement("span"); fd.className = "fd"; hd.appendChild(fd);
-  if (it.folder) { fd.appendChild(iconEl(t, it.done)); fd.appendChild(document.createTextNode(it.folder)); }
+  if (it.folder) { fd.appendChild(document.createTextNode(it.folder)); fd.appendChild(iconEl(t, it.done)); }
 }
 function refreshHd(it) { const i = vis().indexOf(it), el = feed.children[i]; if (el) fillHd(el.querySelector(".hd"), it); }
 function setSel(i, force) {
@@ -646,7 +650,7 @@ let dirSel = 0, dirOpen = null;
 const dirRows = () => S.folders.concat(["+"]);
 function renderDirs() {
   const R = dirRows(); dirSel = Math.max(0, Math.min(R.length - 1, dirSel));
-  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? '<span class="dn">+ nuova</span>' : iconEl(S.ftypes[f] || "generica").outerHTML + '<span class="dn">' + esc(f) + "</span>") + "</span><span>" + (f === "+" ? "" : items.filter((x) => x.folder === f).length) + "</span></div>").join("");
+  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? '<span class="dn">+ nuova</span>' : '<span class="dn">' + esc(f) + "</span>" + iconEl(S.ftypes[f] || "generica").outerHTML) + "</span><span>" + (f === "+" ? "" : items.filter((x) => x.folder === f).length) + "</span></div>").join("");
   const el = $("dirs").children[dirSel]; if (el) el.scrollIntoView({ block: "nearest" });
 }
 $("dirs").addEventListener("click", (e) => { const r = e.target.closest(".dr"); if (!r) return; audio(); const i = +r.dataset.i; if (i === dirSel) M.cartelle.shift(); else { dirSel = i; renderDirs(); d1(); sound("browse"); } });

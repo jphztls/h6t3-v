@@ -43,10 +43,14 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .pane { position: absolute; inset: 0; display: none; background: var(--surface); }
 .pane.on { display: block; }
 .scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
-.it { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--border-hairline) solid var(--line); }
+.it { position: relative; padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--border-hairline) solid var(--line); }
 .it:first-child { border-top: 0; }
-.it .nm { display: inline-block; padding: 0 3px; margin: 0 -3px 4px; font-variant-numeric: tabular-nums; }
-.it.sel .nm { outline: var(--border-hairline) solid var(--line); outline-offset: 0; }   /* scelta: solo un contorno 1px */
+.it .nm { display: inline-block; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.it.sel::after { content: ""; position: absolute; top: 4px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); }   /* nota corrente: pallino in alto a destra */
+.it .hd .l { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.it .ck { flex: none; align-self: center; width: 11px; height: 11px; margin-top: -4px; border: var(--border-hairline) solid var(--line); }   /* tasklist: casella 1px */
+.it .ck.on { background: var(--ink); }
+.it .ev { font-variant-numeric: tabular-nums; }
 .it.same { border-top: 0; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 4px) top left / 100% 1px no-repeat; }   /* stesso giorno: tratteggio 2px 2px */
 .it .tx { white-space: pre-wrap; word-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .it img { display: block; width: 100%; max-height: 260px; object-fit: contain; object-position: left center; }
@@ -67,6 +71,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .cal-g div { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; padding-bottom: 4px; border: var(--border-hairline) solid transparent; font-variant-numeric: tabular-nums; }
 .cal-g .has::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--ink); }   /* pallino: giorno con contenuti */
 .cal-g .sel { border-color: var(--line); }
+.cal-g .evd { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }   /* giorno con eventi */
 .cal-n { margin-top: var(--space-3); white-space: pre-wrap; }
 #dirs .dr { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); border: var(--border-hairline) solid transparent; }
 #dirs .dr.sel { border-color: var(--line); }
@@ -92,8 +97,11 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #d1 .l1 { position: absolute; inset: 0; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); white-space: nowrap; overflow: hidden; }
 #d1 .l1 span { overflow: hidden; text-overflow: ellipsis; }
 #d1 .l1 #d1v { flex: 1; min-width: 0; }
-#d1c { position: absolute; top: 50%; right: var(--space-3); width: 79px; height: 10px; margin-top: -5px; display: none; }   /* VU meter */
+#d1c { flex: 1; min-width: 0; height: 12px; display: none; }   /* VU meter: barre 1px, prima del tempo */
 #d1.meter #d1c { display: block; }
+#d1.meter .l1 #d1v { flex: none; }
+#d1t { flex: none; font-variant-numeric: tabular-nums; }
+#d1t:empty { display: none; }
 #ed { display: none; position: absolute; inset: 0; padding: 0 var(--space-3); overflow: hidden; white-space: pre; align-items: center; }
 #ed .car { display: inline-block; width: 0; border-left: var(--border-hairline) solid var(--ink); margin-right: -1px; height: 20px; vertical-align: -4px; animation: blink 1s steps(1) infinite; }
 #ed .sx { background: var(--surface-inverse); color: var(--ink-inverse); }
@@ -148,7 +156,7 @@ body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }
       <button id="prev" aria-label="Modalità precedente"><svg viewBox="0 0 12 12"><path d="M9 1 L3 6 L9 11 Z"/></svg></button>
       <button id="next" aria-label="Modalità successiva"><svg viewBox="0 0 12 12"><path d="M3 1 L9 6 L3 11 Z"/></svg></button>
     </div>
-    <div id="d1" class="box"><div class="l1"><span id="d1m"></span><span id="d1v"></span></div><canvas id="d1c"></canvas><div id="ed"></div></div>
+    <div id="d1" class="box"><div class="l1"><span id="d1m"></span><span id="d1v"></span><canvas id="d1c"></canvas><span id="d1t"></span></div><div id="ed"></div></div>
   </div>
   <div id="kb"></div>
   <div id="ctl">
@@ -170,7 +178,7 @@ document.addEventListener("dblclick", (e) => e.preventDefault());
 const DPR = Math.min(window.devicePixelRatio || 1, 3);
 const ink = () => getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
 
-const S = { mode: "consulta", lastCap: "registra", theme: "dark", sound: "1", filter: null, folders: ["memo", "idee", "journal", "agenda", "lavoro"], scanFilter: "migliorato" };
+const S = { mode: "consulta", lastCap: "registra", theme: "dark", sound: "1", filter: null, folders: ["memo", "idee", "journal", "agenda", "lavoro"], ftypes: {}, scanFilter: "migliorato" };
 try { Object.assign(S, JSON.parse(store.get("jrn1-set", "{}"))); } catch (e) {}
 const saveS = () => store.set("jrn1-set", JSON.stringify(S));
 document.documentElement.dataset.theme = S.theme;
@@ -283,7 +291,7 @@ function mech(down, big) {
 ["touchend", "click"].forEach((t) => document.addEventListener(t, () => { if (S.sound === "1") audio(); }, true));
 
 /* ============ Modalità ============ */
-const VIEW = ["consulta", "calendario", "cartelle", "edit", "elimina", "archivio"];
+const VIEW = ["consulta", "cartelle", "calendario", "archivio", "elimina", "edit"];
 const CAP = ["registra", "foto", "scansione", "file", "testo"];
 const LABEL = { consulta: "", calendario: "CAL", cartelle: "DIR", edit: "EDIT", elimina: "DEL", archivio: "ARC", registra: "REC", foto: "CAM", scansione: "SCAN", file: "FILE", testo: "TEXT" };
 const M = {};                                         // gestori: enter, leave, dial, sdial, center, shift, d1
@@ -291,8 +299,9 @@ let mode = VIEW.includes(S.mode) || CAP.includes(S.mode) ? S.mode : "consulta";
 function setMode(k) {
   if (k === mode) return;
   if (rec) { sound("stop"); return; }
-  const old = M[mode]; if (old && old.leave) old.leave();
+  const old = M[mode], was = mode, keep = cur(); if (old && old.leave) old.leave();
   mode = k; S.mode = k; if (CAP.includes(k)) S.lastCap = k; saveS();
+  if (qf && (was === "consulta" || k === "consulta")) { renderFeed(); setSel(Math.max(0, vis().indexOf(keep)), true); }
   showPane("feed"); M[k].enter && M[k].enter(); d1();
 }
 function cycle(dir, cap) {
@@ -307,6 +316,7 @@ function flash(t) { msg = t; clearTimeout(msgT); msgT = setTimeout(() => { msg =
 function d1() {
   $("d1m").textContent = LABEL[mode]; $("d1m").style.display = LABEL[mode] ? "" : "none";
   $("d1v").textContent = msg || (M[mode].d1 ? M[mode].d1() : "");
+  $("d1t").textContent = rec && !msg ? clock((performance.now() - rec.t0) / 1000) : "";
   $("d1").classList.toggle("meter", !!rec && !msg);
 }
 const clock = (s) => Math.floor(s / 60) + ":" + pad(Math.floor(s % 60));
@@ -326,7 +336,13 @@ $("theme").addEventListener("click", () => { audio(); S.theme = S.theme === "dar
 /* ============ Feed ============ */
 const feed = $("feed");
 let sel = 0;
-const vis = () => (S.filter && mode === "cartelle" ? items.filter((i) => i.folder === S.filter) : items);
+let qf = null;                                        // filtro rapido di CONSULTA (ghiera cliccata a sx/dx)
+const vis = () => (S.filter && mode === "cartelle" ? items.filter((i) => i.folder === S.filter) : qf && mode === "consulta" ? items.filter((i) => i.folder === qf) : items);
+/* Tipi di cartella: generica, tasklist (si spunta), calendar (ha un evento) */
+const ftype = (it) => (it && it.folder && S.ftypes[it.folder]) || "generica";
+const whenStr = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+const whenDate = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10), +s.slice(11, 13) || 0, +s.slice(14, 16) || 0);
+const fmtWhen = (s) => { const d = typeof s === "string" ? whenDate(s) : s; return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + pad(d.getFullYear() % 100) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
 const cur = () => vis()[sel];
 const urls = new Map();
 function urlOf(it, k) { const key = it.name + "#" + (k || 0); if (!urls.has(key)) urls.set(key, URL.createObjectURL(parts(it)[k || 0].blob)); return urls.get(key); }
@@ -376,13 +392,21 @@ function renderFeed() {
   L.forEach((it, i) => {
     const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : "") + (i && L[i - 1].name.slice(0, 6) === it.name.slice(0, 6) ? " same" : ""); el.dataset.i = i;
     const hd = document.createElement("div"); hd.className = "hd"; el.appendChild(hd);
-    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = it.name; hd.appendChild(nm);
-    const fd = document.createElement("span"); fd.className = "fd"; fd.textContent = it.folder || ""; hd.appendChild(fd);
+    fillHd(hd, it);
     parts(it).forEach((_, k) => el.appendChild(partEl(it, k)));
     feed.appendChild(el);
   });
   showSel(); d1();
 }
+function fillHd(hd, it) {                       // intestazione: [casella] nome [evento] ... cartella
+  hd.innerHTML = ""; const l = document.createElement("span"); l.className = "l"; hd.appendChild(l);
+  const t = ftype(it);
+  if (t === "tasklist") { const c = document.createElement("span"); c.className = "ck" + (it.done ? " on" : ""); l.appendChild(c); }
+  const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = it.name; l.appendChild(nm);
+  if (t === "calendar" && it.when) { const e = document.createElement("span"); e.className = "ev"; e.textContent = fmtWhen(it.when); l.appendChild(e); }
+  const fd = document.createElement("span"); fd.className = "fd"; fd.textContent = it.folder || ""; hd.appendChild(fd);
+}
+function refreshHd(it) { const i = vis().indexOf(it), el = feed.children[i]; if (el) fillHd(el.querySelector(".hd"), it); }
 function setSel(i, force) {
   const L = vis(); i = Math.max(0, Math.min(L.length - 1, i)); if (i === sel && !force) return false;
   const o = feed.children[sel]; if (o) o.classList.remove("sel");
@@ -393,6 +417,26 @@ function showSel() {
   const top = el.offsetTop, bot = top + el.offsetHeight, h = feed.clientHeight;
   if (top < feed.scrollTop) feed.scrollTop = top; else if (bot > feed.scrollTop + h) feed.scrollTop = Math.min(top, bot - h);
 }
+function setSelTop(i) {                         // salto a una nota: il suo inizio va in cima al feed, scorrendo
+  const L = vis(); i = Math.max(0, Math.min(L.length - 1, i)); if (i === sel) return false;
+  const o = feed.children[sel]; if (o) o.classList.remove("sel");
+  sel = i; const n = feed.children[sel]; if (n) { n.classList.add("sel"); feed.scrollTo({ top: n.offsetTop, behavior: "smooth" }); }
+  d1(); return true;
+}
+/* Scorrimento continuo con la ghiera: la nota corrente è quella sotto una linea di riferimento
+   (in cima; nell'ultima schermata la linea scende fino in fondo, così si arriva anche alle ultime) */
+let scrollTick = 0;
+function smoothScroll(dy) {
+  const max = feed.scrollHeight - feed.clientHeight, o = feed.scrollTop;
+  if (max <= 0 || (dy > 0 && o >= max - 0.5) || (dy < 0 && o <= 0.5)) return false;
+  feed.scrollTop = Math.max(0, Math.min(max, o + dy));
+  const st = feed.scrollTop, h = feed.clientHeight, zone = Math.min(h, max), t = zone > 0 ? Math.max(0, Math.min(1, 1 - (max - st) / zone)) : 0;
+  const ref = st + 6 + (h - 12) * t, ch = feed.children; let i = 0;
+  while (i < ch.length - 1 && ch[i + 1].offsetTop <= ref) i++;
+  if (i !== sel) { const a = ch[sel]; if (a) a.classList.remove("sel"); sel = i; ch[sel].classList.add("sel"); d1(); sound("browse"); }
+  else if (Math.abs((scrollTick += st - o)) > 40) { scrollTick = 0; sound("detent"); }
+  return true;
+}
 function jumpDay(dir) {
   const L = vis(), day = (L[sel] || { name: "" }).name.slice(0, 6); let i = sel;
   while (i + dir >= 0 && i + dir < L.length && L[i].name.slice(0, 6) === day) i += dir;
@@ -400,8 +444,10 @@ function jumpDay(dir) {
 }
 feed.addEventListener("click", (e) => {
   const el = e.target.closest(".it"); if (!el) return; audio(); const i = +el.dataset.i;
+  if (e.target.classList.contains("ck") && mode === "consulta") { setSel(i); toggleDone(cur()); return; }
   if (i === sel && mode === "consulta") openDetail(); else { setSel(i); sound("browse"); }
 });
+async function toggleDone(it) { if (!it) return; it.done = !it.done || undefined; await dbPut(it); refreshHd(it); d1(); sound("act"); }
 
 /* Dettaglio */
 let player = null, inDetail = false;
@@ -429,29 +475,58 @@ function detailDial(dir) {
 }
 
 /* ---- CONSULTA ---- */
+let evEdit = null;                                    // nota di una cartella calendar: data dell'evento in modifica
+const pre = () => (qf ? qf + "  " : "");
 M.consulta = {
-  leave() { if (inDetail) closeDetail(); },
-  dial(d) { return inDetail ? detailDial(d) : setSel(sel + d); },
-  sdial(d) { return inDetail ? detailDial(d * 5) : assignFolder(d); },   // Shift + ghiera: cambia cartella della nota
-  center() { inDetail ? closeDetail() : openDetail(); },
-  shift() { inDetail ? closeDetail() : openDetail(); },
-  d1() { const it = cur(); return it ? it.name : ""; },
+  leave() { if (inDetail) closeDetail(); evEdit = null; },
+  scroll(px) { return inDetail || evEdit ? null : smoothScroll(px); },   // ghiera: scorrimento continuo
+  dial(d) { if (evEdit) { evEdit.t = new Date(evEdit.t.getFullYear(), evEdit.t.getMonth(), evEdit.t.getDate() + d, evEdit.t.getHours(), evEdit.t.getMinutes()); d1(); return true; } return inDetail ? detailDial(d) : setSel(sel + d); },
+  sdial(d) {                                   // Shift + ghiera: cambia cartella (o l'ora dell'evento)
+    if (evEdit) { evEdit.t = new Date(evEdit.t.getTime() + d * 15 * 60000); d1(); return true; }
+    return inDetail ? detailDial(d * 5) : assignFolder(d);
+  },
+  tap(z) {                                     // ghiera cliccata: su/giù nota, sx/dx filtro cartella
+    if (evEdit) return false;
+    if (z === "u" || z === "d") return inDetail ? detailDial(z === "u" ? -3 : 3) : setSelTop(sel + (z === "u" ? -1 : 1));
+    if (inDetail) closeDetail();
+    const F = [null].concat(S.folders), it = cur(); qf = F[(F.indexOf(qf) + (z === "r" ? 1 : -1) + F.length) % F.length];
+    renderFeed(); const j = vis().indexOf(it); sel = -1; setSel(j >= 0 ? j : 0, true); const n = feed.children[sel]; feed.scrollTop = n ? n.offsetTop : 0;
+    return true;
+  },
+  async center() {
+    if (evEdit) { const it = evEdit.it; evEdit = null; if (it.when) { delete it.when; await dbPut(it); refreshHd(it); flash("Evento tolto"); } sound("menu"); d1(); return; }
+    inDetail ? closeDetail() : openDetail();
+  },
+  async shift() {
+    const it = cur();
+    if (inDetail) { closeDetail(); return; }
+    if (evEdit) { evEdit.it.when = whenStr(evEdit.t); await dbPut(evEdit.it); refreshHd(evEdit.it); evEdit = null; sound("act"); d1(); return; }
+    if (ftype(it) === "tasklist") return toggleDone(it);
+    if (ftype(it) === "calendar") { const d = ymdDate(it.name.slice(0, 6)); evEdit = { it, t: it.when ? whenDate(it.when) : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0) }; sound("set"); d1(); return; }
+    openDetail();
+  },
+  d1() {
+    if (evEdit) return "evento " + fmtWhen(evEdit.t);
+    const it = cur(); return pre() + (it ? it.name + (ftype(it) === "tasklist" && it.done ? "  fatto" : "") : "");
+  },
 };
 
 /* ---- CALENDARIO ---- */
 let calDay = new Date();
 const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+const evItems = () => items.filter((i) => i.when && ftype(i) === "calendar");
 function dayCount(d) { const k = ymd(d); return items.filter((i) => i.name.startsWith(k)).length; }
 function renderCal() {
   const y = calDay.getFullYear(), m = calDay.getMonth(), first = new Date(y, m, 1), off = (first.getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
-  const has = new Set(items.map((i) => i.name.slice(0, 6)));
+  const has = new Set(items.map((i) => i.name.slice(0, 6))), evd = new Set(evItems().map((i) => ymd(whenDate(i.when))));
   let h = '<div class="cal-h">' + MESI[m] + " " + y + '</div><div class="cal-g">' + ["L", "M", "M", "G", "V", "S", "D"].map((x) => "<div>" + x + "</div>").join("");
   for (let i = 0; i < off; i++) h += "<div></div>";
-  for (let d = 1; d <= n; d++) { const k = ymd(new Date(y, m, d)); h += '<div data-d="' + d + '" class="' + (has.has(k) ? "has" : "") + (d === calDay.getDate() ? " sel" : "") + '">' + d + "</div>"; }
+  for (let d = 1; d <= n; d++) { const k = ymd(new Date(y, m, d)); h += '<div data-d="' + d + '" class="' + (has.has(k) ? "has" : "") + (evd.has(k) ? " evd" : "") + (d === calDay.getDate() ? " sel" : "") + '">' + d + "</div>"; }
   const k = ymd(calDay), cnt = {}, NAMES = { text: "testo", audio: "audio", image: "immagini", pdf: "pdf", file: "file" };
   for (const it of items) if (it.name.startsWith(k)) for (const p of parts(it)) cnt[p.type] = (cnt[p.type] || 0) + 1;
   const sum = Object.keys(NAMES).filter((t) => cnt[t]).map((t) => NAMES[t] + " " + cnt[t]).join("   ");
-  $("cal").innerHTML = h + '</div><div class="cal-n">' + sum + "</div>";
+  const ev = evItems().filter((i) => ymd(whenDate(i.when)) === k).sort((a, b) => (a.when < b.when ? -1 : 1)).map((i) => i.when.slice(11) + "  " + i.name).join("\n");
+  $("cal").innerHTML = h + '</div><div class="cal-n">' + esc(sum + (sum && ev ? "\n" : "") + ev) + "</div>";
 }
 $("cal").addEventListener("click", (e) => { const c = e.target.closest("[data-d]"); if (!c) return; audio(); const d = +c.dataset.d; if (d === calDay.getDate()) M.calendario.shift(); else { calDay = new Date(calDay.getFullYear(), calDay.getMonth(), d); renderCal(); d1(); sound("browse"); } });
 M.calendario = {
@@ -460,8 +535,10 @@ M.calendario = {
   sdial(d) { calDay = new Date(calDay.getFullYear(), calDay.getMonth() + d, Math.min(calDay.getDate(), 28)); renderCal(); return true; },
   center() { this.shift(); },
   shift() {
-    const k = ymd(calDay), i = items.findIndex((x) => x.name.startsWith(k));
+    const k = ymd(calDay); let i = items.findIndex((x) => x.name.startsWith(k));
+    if (i < 0) i = items.findIndex((x) => x.when && ftype(x) === "calendar" && ymd(whenDate(x.when)) === k);
     if (i < 0) { sound("stop"); return; }
+    qf = null;
     S.filter = null; setMode("consulta"); renderFeed(); setSel(i, true); sound("set");
   },
   d1() { const n = dayCount(calDay); return pad(calDay.getDate()) + "." + pad(calDay.getMonth() + 1) + "." + pad(calDay.getFullYear() % 100) + (n ? "  " + n : ""); },
@@ -472,22 +549,24 @@ function assignFolder(d) {
   const it = cur(); if (!it) return false;
   const L = [""].concat(S.folders), i = Math.max(0, L.indexOf(it.folder || ""));
   it.folder = L[(i + d + L.length) % L.length] || undefined; dbPut(it);
-  const el = feed.children[sel]; if (el) el.querySelector(".fd").textContent = it.folder || ""; d1(); return true;
+  refreshHd(it); d1(); return true;
 }
 let dirSel = 0, dirOpen = null;
 const dirRows = () => S.folders.concat(["+"]);
 function renderDirs() {
   const R = dirRows(); dirSel = Math.max(0, Math.min(R.length - 1, dirSel));
-  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? "+ nuova" : esc(f)) + "</span><span>" + (f === "+" ? "" : items.filter((x) => x.folder === f).length) + "</span></div>").join("");
+  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? "+ nuova" : esc(f)) + "</span><span>" + (f === "+" ? "" : (S.ftypes[f] ? S.ftypes[f] + "  " : "") + items.filter((x) => x.folder === f).length) + "</span></div>").join("");
   const el = $("dirs").children[dirSel]; if (el) el.scrollIntoView({ block: "nearest" });
 }
 $("dirs").addEventListener("click", (e) => { const r = e.target.closest(".dr"); if (!r) return; audio(); const i = +r.dataset.i; if (i === dirSel) M.cartelle.shift(); else { dirSel = i; renderDirs(); d1(); sound("browse"); } });
 let dirAct = 0, dirConfirm = false;
-function dirActs(f) { return f === "+" ? [["nuova"]] : [["apri"], ["rinomina"]].concat(S.folders.filter((o) => o !== f).map((o) => ["unisci", o])).concat([["elimina"]]); }
-const actLabel = (a) => (a[0] === "unisci" ? "unisci in " + a[1] : a[0]);
+function dirActs(f) { return f === "+" ? [["nuova"]] : [["apri"], ["rinomina"], ["tipo"]].concat(S.folders.filter((o) => o !== f).map((o) => ["unisci", o])).concat([["elimina"]]); }
+const FTYPES = ["generica", "tasklist", "calendar"];
+const actLabel = (a, f) => (a[0] === "unisci" ? "unisci in " + a[1] : a[0] === "tipo" ? "tipo " + (S.ftypes[f] || "generica") : a[0]);
 async function mergeFolder(from, to) {             // unisce (o elimina se to è vuoto) una cartella
+  if (qf === from) qf = to || null;
   for (const it of items) if (it.folder === from) { it.folder = to || undefined; await dbPut(it); }
-  S.folders.splice(S.folders.indexOf(from), 1); saveS();
+  S.folders.splice(S.folders.indexOf(from), 1); delete S.ftypes[from]; saveS();
 }
 M.cartelle = {
   enter() { dirOpen = null; S.filter = null; dirAct = 0; dirConfirm = false; showPane("dirs"); renderDirs(); },
@@ -501,6 +580,7 @@ M.cartelle = {
     if (dirOpen) { this.center(); return; }
     const f = dirRows()[dirSel], a = dirActs(f)[dirAct] || ["apri"];
     if (a[0] === "nuova" || a[0] === "rinomina") { flash("Ruota il telefono"); sound("set"); return; }
+    if (a[0] === "tipo") { const t = FTYPES[(FTYPES.indexOf(S.ftypes[f] || "generica") + 1) % 3]; if (t === "generica") delete S.ftypes[f]; else S.ftypes[f] = t; saveS(); renderDirs(); renderFeed(); d1(); sound("act"); return; }
     if (a[0] === "apri") { dirOpen = f; S.filter = f; sel = 0; showPane("feed"); renderFeed(); sound("set"); return; }
     if (!dirConfirm) { dirConfirm = true; d1(); sound("stop"); return; }
     dirConfirm = false;
@@ -512,7 +592,7 @@ M.cartelle = {
   d1() {
     if (dirOpen) { const it = cur(); return dirOpen + (it ? "  " + it.name : ""); }
     const f = dirRows()[dirSel], a = dirActs(f)[dirAct] || ["apri"];
-    return (f === "+" ? "" : f + "  ") + actLabel(a) + (dirConfirm ? "  conferma?" : "");
+    return (f === "+" ? "" : f + "  ") + actLabel(a, f) + (dirConfirm ? "  conferma?" : "");
   },
 };
 function renderFeedKeep() { const it = cur(); renderFeed(); if (it) setSel(Math.max(0, vis().indexOf(it)), true); }
@@ -654,8 +734,9 @@ function meter() {
   const w = d1c.clientWidth, h = d1c.clientHeight;
   if (w) {
     if (d1c.width !== Math.round(w * DPR)) { d1c.width = Math.round(w * DPR); d1c.height = Math.round(h * DPR); }
-    const c = d1c.getContext("2d"), N = 16, sw = 4 * DPR, gp = Math.round(DPR); c.clearRect(0, 0, d1c.width, d1c.height); c.fillStyle = ink(); c.strokeStyle = ink(); c.lineWidth = DPR;
-    for (let i = 0; i < N; i++) { const x = i * (sw + gp); if (i < Math.round(r.lv * N)) c.fillRect(x, 0, sw, d1c.height); else c.strokeRect(x + DPR / 2, DPR / 2, sw - DPR, d1c.height - DPR); }
+    const c = d1c.getContext("2d"), px = Math.max(1, Math.round(DPR)), H = d1c.height, N = Math.floor(d1c.width / (2 * px)), on = Math.round(r.lv * N);
+    c.clearRect(0, 0, d1c.width, H); c.fillStyle = ink();     // barre verticali 1px distanziate 1px: accese a tutta altezza, spente 1px
+    for (let i = 0; i < N; i++) { const bh = i < on ? H : px; c.fillRect(i * 2 * px, Math.round((H - bh) / 2), px, bh); }
   }
   if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); }
   requestAnimationFrame(meter);
@@ -664,7 +745,7 @@ M.registra = {
   dial(d) { return setSel(sel + d); }, sdial(d) { return jumpDay(d); },
   center() { if (!rec) openDetailFrom(); },
   shift() { rec ? recStop() : recStart(null); },
-  d1() { return rec ? rec.name + "  " + clock((performance.now() - rec.t0) / 1000) : nextName(); },
+  d1() { return rec ? rec.name : nextName(); },
   leave() {},
 };
 function openDetailFrom() { setMode("consulta"); openDetail(); }
@@ -891,7 +972,7 @@ function step(dir) {
 }
 dial.addEventListener("pointerdown", (e) => {
   e.preventDefault(); dial.setPointerCapture(e.pointerId); audio();
-  const p = dialPos(e); D.id = e.pointerId; D.moved = false; D.acc = 0; D.lastA = p.a; D.center = p.r < 0.36;
+  const p = dialPos(e); D.id = e.pointerId; D.moved = false; D.acc = 0; D.lastA = p.a; D.center = p.r < 0.36; D.r = p.r; D.a = p.a;
   if (D.center) sound("set");
 });
 dial.addEventListener("pointermove", (e) => {
@@ -899,12 +980,20 @@ dial.addEventListener("pointermove", (e) => {
   const p = dialPos(e); let da = p.a - D.lastA; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
   D.lastA = p.a; D.acc += da; D.rot += da;
   if (!D.moved && Math.abs(D.acc) > 0.17) D.moved = true;
-  if (D.moved) while (Math.abs(D.acc) >= DETENT) { const dir = D.acc > 0 ? 1 : -1; D.acc -= dir * DETENT; if (step(dir)) sound(shiftHeld() ? "detent" : "browse"); else { sound("stop"); D.acc = 0; break; } }
+  const sc = D.moved && !shiftHeld() && M[mode].scroll ? M[mode].scroll(da * 120) : null;   // consulta: scorrimento continuo
+  if (sc !== null && sc !== undefined) { if (sc) D.acc = 0; else if (Math.abs(D.acc) >= DETENT) { const dir = D.acc > 0 ? 1 : -1; D.acc = 0; if (M[mode].dial(dir)) sound("browse"); else sound("stop"); } }
+  else if (D.moved) while (Math.abs(D.acc) >= DETENT) { const dir = D.acc > 0 ? 1 : -1; D.acc -= dir * DETENT; if (step(dir)) sound(shiftHeld() ? "detent" : "browse"); else { sound("stop"); D.acc = 0; break; } }
   drawDial();
 });
 function dialUp(e) {
   if (D.id !== e.pointerId) return; D.id = null;
   if (D.center && M[mode].center) M[mode].center();
+  else if (!D.moved && D.r < 1.1) {             // clic sulla corona: su, giù, sinistra, destra
+    const a = D.a, z = Math.abs(a) < Math.PI / 4 ? "r" : Math.abs(a) > (3 * Math.PI) / 4 ? "l" : a > 0 ? "d" : "u", h = M[mode];
+    let ok = false;
+    if (h.tap) ok = h.tap(z); else if ((z === "u" || z === "d") && h.dial) ok = h.dial(z === "u" ? -1 : 1);
+    sound(ok ? "browse" : "stop");
+  }
   d1();
 }
 dial.addEventListener("pointerup", dialUp); dial.addEventListener("pointercancel", dialUp);
@@ -1007,6 +1096,8 @@ async function saveDraft() {
     else {
       const i = S.folders.indexOf(old), merge = nw && S.folders.includes(nw) && nw !== old;   // nome già esistente = unisce
       if (merge || !nw) S.folders.splice(i, 1); else S.folders[i] = nw;
+      if (nw && !merge && S.ftypes[old]) S.ftypes[nw] = S.ftypes[old];
+      delete S.ftypes[old]; if (qf === old) qf = merge || !nw ? null : nw;
       for (const it of items) if (it.folder === old) { it.folder = nw || undefined; await dbPut(it); }
       editTarget.dir = nw || null; dirSel = Math.max(0, S.folders.indexOf(nw)); flash(nw ? (merge ? old + " → " + nw : "Rinominata " + nw) : "Eliminata " + old);
     }
@@ -1089,12 +1180,14 @@ async function exportZip(list, fname) {
     for (let k = 0; k < P.length; k++) {
       const p = P[k], fn = partName(it, k);
       files.push({ name: fn, data: p.type === "text" ? enc.encode(p.text) : new Uint8Array(await p.blob.arrayBuffer()), date: it.created });
-      index.push({ file: fn, item: it.name, type: p.type, created: it.created, orig: p.orig || undefined, dur: p.dur, peaks: p.peaks, filter: p.filter });
-      if (it.folder) folders.push(fn + "\t" + it.folder);
+      index.push({ file: fn, item: it.name, type: p.type, created: it.created, orig: p.orig || undefined, dur: p.dur, peaks: p.peaks, filter: p.filter, folder: k ? undefined : it.folder, done: k ? undefined : it.done, when: k ? undefined : it.when });
+      if (it.folder) folders.push(fn + "\t" + it.folder + (k ? "" : ftype(it) === "tasklist" && it.done ? "\tfatto" : ftype(it) === "calendar" && it.when ? "\t" + it.when.replace("T", " ") : ""));
     }
   }
-  files.push({ name: "cartelle.txt", data: enc.encode(folders.join("\n") + (folders.length ? "\n" : "")), date: Date.now() });
-  files.push({ name: "index.json", data: enc.encode(JSON.stringify({ app: "JRN-1", v: 2, items: index }, null, 1)), date: Date.now() });
+  // cartelle.txt, leggibile: prima i tipi (cartella<TAB>tipo), poi una riga per file (file<TAB>cartella[<TAB>fatto | data ora evento])
+  const tl = S.folders.map((f) => f + "\t" + (S.ftypes[f] || "generica")), all = tl.concat(tl.length && folders.length ? [""] : [], folders);
+  files.push({ name: "cartelle.txt", data: enc.encode(all.join("\n") + (all.length ? "\n" : "")), date: Date.now() });
+  files.push({ name: "index.json", data: enc.encode(JSON.stringify({ app: "JRN-1", v: 3, folders: S.folders.map((f) => ({ name: f, type: S.ftypes[f] || "generica" })), items: index }, null, 1)), date: Date.now() });
   await shareFiles([new File([makeZip(files)], fname, { type: "application/zip" })]);
 }
 async function shareFiles(files) {
@@ -1107,8 +1200,13 @@ $("fzip").addEventListener("change", async (ev) => {
     const ents = await readZip(f), dec = new TextDecoder(), meta = {}, fold = {};
     const byBase = (n) => ents.find((x) => x.name.split("/").pop() === n);
     const ix = byBase("index.json"), cf = byBase("cartelle.txt");
-    if (ix) try { for (const m of JSON.parse(dec.decode(ix.data)).items || []) meta[m.file] = m; } catch (e) {}
-    if (cf) for (const line of dec.decode(cf.data).split(/\r?\n/)) { const [a, b] = line.split("\t"); if (a && b) fold[a] = b.trim(); }
+    const addF = (f, t) => { if (!f) return; if (!S.folders.includes(f)) S.folders.push(f); if (t && FTYPES.includes(t) && !S.ftypes[f]) { if (t !== "generica") S.ftypes[f] = t; } };
+    if (ix) try { const J = JSON.parse(dec.decode(ix.data)); for (const m of J.items || []) meta[m.file] = m; for (const f of J.folders || []) addF(f.name, f.type); } catch (e) {}
+    if (cf) for (const line of dec.decode(cf.data).split(/\r?\n/)) {
+      const [a, b, c] = line.split("\t").map((x) => (x || "").trim()); if (!a || !b) continue;
+      if (/^\d{6}_\d+/.test(a)) { fold[a] = b; if (c && meta[a] == null) meta[a] = {}; if (c === "fatto") meta[a].done = true; else if (/^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(c)) meta[a].when = c.replace(" ", "T"); }
+      else addF(a, b);                          // riga di tipo: cartella<TAB>tipo
+    }
     let added = 0, skipped = 0; const pending = [];
     const mkPart = (x, base, ext) => { const m = meta[base] || {}, mime = MIME[ext] || "application/octet-stream", p = { ext: ext || "bin", mime, type: m.type || typeOf(ext, mime), orig: m.orig }; if (p.type === "text") p.text = dec.decode(x.data); else p.blob = new Blob([x.data], { type: mime }); if (m.peaks) { p.peaks = m.peaks; p.dur = m.dur; } if (m.filter) p.filter = m.filter; return p; };
     for (const x of ents) {
@@ -1121,6 +1219,7 @@ $("fzip").addEventListener("change", async (ev) => {
       const it = Object.assign({ name: name || nextName(new Date(created)), created }, mkPart(x, base, ext));
       if (!name) it.orig = base;
       if (fold[base]) { it.folder = fold[base]; if (!S.folders.includes(it.folder)) S.folders.push(it.folder); }
+      if (m.done) it.done = true; if (m.when) it.when = m.when;
       if (it.type === "audio" && !it.peaks) { const p = await peaksOf(it.blob); if (p) Object.assign(it, p); }
       it._new = true; items.push(it); added++;
     }

@@ -105,10 +105,10 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #kb { display: none; }
 
 /* --- Orizzontale: Display 1 ridotto (0,7) + 4 file di tastiera + Shift e striscia --- */
-body.land #app { max-width: none; display: grid; grid-template-rows: .7fr 1fr 1fr 1fr 1fr 1fr; row-gap: 6px;
+body.land #app { max-width: none; display: grid; grid-template-rows: .7fr 1fr 1fr 1fr 1fr 1fr; grid-template-columns: minmax(0, 1fr); row-gap: 6px;
   padding: var(--space-2) max(var(--space-2), env(safe-area-inset-right)) max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left)); }
 body.land .top, body.land #d2, body.land #dial { display: none; }
-body.land #bar { grid-row: 1; height: auto; margin: 0; min-height: 0; }
+body.land #bar { grid-row: 1; height: auto; margin: 0; min-height: 0; min-width: 0; }
 body.land #arrows { order: 2; margin-left: -1px; }
 body.land #d1 { margin-left: 0; }
 body.land #ed { display: flex; }
@@ -1015,7 +1015,10 @@ let land = false;
 function layout() {
   const app = $("app"), sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
   const w = window.innerWidth, h = window.innerHeight, L = w > h && h < 520;
-  if (navigator.standalone) { app.style.bottom = "auto"; app.style.height = (L ? sw : sh) + "px"; }   // iOS dalla Home: altezza reale dello schermo
+  if (navigator.standalone) {                  // iOS dalla Home: la pagina risulta più corta dello schermo; si usa l'altezza reale
+    const H = (L ? sw : sh) + "px";
+    for (const el of [document.documentElement, document.body, app]) { el.style.bottom = "auto"; el.style.height = H; }
+  }
   if (L !== land) {
     land = L; document.body.classList.toggle("land", land);
     if (land) {

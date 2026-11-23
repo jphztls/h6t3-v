@@ -108,9 +108,6 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #ed .car { display: inline-block; width: 0; border-left: var(--border-hairline) solid var(--ink); margin-right: -1px; height: 20px; vertical-align: -4px; animation: blink 1s steps(1) infinite; }
 #ed .sx { background: var(--surface-inverse); color: var(--ink-inverse); }
 @keyframes blink { 50% { visibility: hidden; } }
-/* Display 1 come OLED simulato (DSP-1): stesso aspetto con tema chiaro e scuro */
-#d1g { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-body.oled #d1 .l1, body.oled #ed { visibility: hidden; }
 
 /* Controlli: Shift alto quanto la ghiera, LED pieno al centro della curva */
 #ctl { position: relative; flex: none; display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-3) var(--space-2); }
@@ -173,7 +170,6 @@ body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }
 <input type="file" id="fin">
 <input type="file" id="fzip" accept=".zip,application/zip">
 <script src="scan.js"></script>
-<script src="display.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -324,7 +320,6 @@ function d1() {
   $("d1v").textContent = msg || (M[mode].d1 ? M[mode].d1() : "");
   $("d1t").textContent = rec && !msg ? clock((performance.now() - rec.t0) / 1000) : "";
   $("d1").classList.toggle("meter", !!rec && !msg);
-  drawD1();
 }
 const clock = (s) => Math.floor(s / 60) + ":" + pad(Math.floor(s % 60));
 
@@ -745,7 +740,7 @@ function meter() {
     c.clearRect(0, 0, d1c.width, H); c.fillStyle = ink();     // barre verticali 1px distanziate 1px: accese a tutta altezza, spente 1px
     for (let i = 0; i < N; i++) { const bh = i < on ? H : px; c.fillRect(i * 2 * px, Math.round((H - bh) / 2), px, bh); }
   }
-  if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); } else drawD1();
+  if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); }
   requestAnimationFrame(meter);
 }
 M.registra = {
@@ -954,7 +949,7 @@ M.scansione = {
       SC.pages = parts(SC.doc).length; unfreezeScan(); d1();
     } catch (e) { flash("Errore: " + (e.message || e)); sound("stop"); }
   },
-  d1() { return "p." + (SC.pages + 1) + "  " + S.scanFilter + (SC.srcMode === "importa" && !SC.frozen ? "  importa" : ""); },
+  d1() { return (SC.doc ? SC.doc.name : nextName()) + "  p." + (SC.pages + 1) + "  " + S.scanFilter + (SC.srcMode === "importa" && !SC.frozen ? "  importa" : ""); },
 };
 
 /* ---- FILE: nome proposto con la data del file, la ghiera la cambia ---- */
@@ -1122,7 +1117,6 @@ const ed = $("ed");
 function esc(s) { return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])).replace(/\n/g, "↵"); }
 function renderEd() {
   if (!editTarget) store.set("jrn1-draft", draft.text);
-  drawD1();
   const t = draft.text, c = draft.caret; let h;
   if (hasSel()) { const [a, b] = selRange(); h = esc(t.slice(0, a)) + (c === a ? '<span class="car"></span>' : "") + '<span class="sx">' + esc(t.slice(a, b)) + "</span>" + (c === b ? '<span class="car"></span>' : "") + esc(t.slice(b)); }
   else h = esc(t.slice(0, c)) + '<span class="car"></span>' + esc(t.slice(c));
@@ -1278,58 +1272,6 @@ $("fzip").addEventListener("change", async (ev) => {
   } catch (e) { flash("ZIP non leggibile"); sound("stop"); }
 });
 
-/* ============ Display 1: OLED simulato col motore di DSP-1 (preset "OLED DISPLAY SECONDARIO") ============
-   22 punti di altezza (1 punto = 1px), larghezza adattata; font bitmap 5×7 a doppia scala. */
-const OLED = {"v":1,"name":"OLED DISPLAY SECONDARIO","type":"oled","struct":"matrix","light":"emit","color":"mono","nx":128,"ny":22,"pitch":8,"layout":"pentile","fillX":84,"fillY":49,"round":100,"bits":2,"dither":0,"tintH":0,"tintS":0,"tintL":100,"bgH":0,"bgS":0,"bgL":0,"bright":138,"contrast":99,"black":0,"gamma":100,"sat":100,"unlit":0,"scan":0,"bloom":14,"back":0,"curve":0,"persist":0,"flick":0,"noise":0,"view":0,"shadow":0,"mesh":0,"edge":88,"glare":0,"glareA":-30,"glareW":5,"ghost":31,"ghostD":12,"ghostA":270,"frameW":24,"frameL":6,"frost":42,"frostR":3,"gTintH":200,"gTintS":15,"gTintA":0,"haze":0,"segN":6,"segK":7,"segH":160,"segT":8,"segSlant":0,"segGap":58,"segSpace":22,"icons":"some","colon":"blink","src":"pattern","pattern":"grid","fit":"cover","text":"DSP-1 PRONTO","font":"5x7","tscale":1,"tpos":"bottom","tscroll":0,"tout":1,"invert":0};
-const FONT2 = Object.assign({}, window.DSP ? DSP.FONT : {}, {"a": "00000000000111000001011111000101111", "b": "10000100001011011001100011000111110", "c": "00000000000111010000100001000101110", "d": "00001000010110110011100011000101111", "e": "00000000000111010001111111000001110", "f": "00110010010100011100010000100001000", "g": "00000011111000110001011110000101110", "h": "10000100001011011001100011000110001", "i": "00100000000110000100001000010001110", "j": "00010000000011000010000101001001100", "k": "10000100001001010100110001010010010", "l": "01100001000010000100001000010001110", "m": "00000000001101010101101011000110001", "n": "00000000001011011001100011000110001", "o": "00000000000111010001100011000101110", "p": "00000000001111010001111101000010000", "q": "00000000000110110011011110000100001", "r": "00000000001011011001100001000010000", "s": "00000000000111010000011100000111110", "t": "01000010001110001000010000100100110", "u": "00000000001000110001100011001101101", "v": "00000000001000110001100010101000100", "w": "00000000001000110001101011010101010", "x": "00000000001000101010001000101010001", "y": "00000000001000110001011110000101110", "z": "00000000001111100010001000100011111", "à": "01000001000111000001011111000101111", "á": "00010001000111000001011111000101111", "è": "01000001000111010001111111000001110", "é": "00010001000111010001111111000001110", "ì": "01000001000110000100001000010001110", "í": "00010001000110000100001000010001110", "ò": "01000001000111010001100011000101110", "ó": "00010001000111010001100011000101110", "ù": "01000001001000110001100011001101101", "ú": "00010001001000110001100011001101101", "È": "01000001001111110000111101000011111", "É": "00010001001111110000111101000011111", "À": "01000001000111010001111111000110001", ",": "00000000000000000000011000010001000", ";": "00000011000110000000011000010001000", "'": "01100001000100000000000000000000000", "\"": "01010010100101000000000000000000000", "’": "01100001000100000000000000000000000", "(": "00010001000100001000010000010000010", ")": "01000001000001000010000100010001000", "=": "00000000001111100000111110000000000", "#": "01010010101111101010111110101001010", "%": "11000110010001000100010001001100011", "&": "01100100101010001000101011001001101", "@": "01110100010000101101101011010101110", "→": "00000001000001011111000100010000000", "↵": "00001000010010101001111110100000100", "…": "00000000000000000000000000000010101", "°": "01100100101001001100000000000000000", "|": "00100001000010000100001000010000100", "×": "00000100010101000100010101000100000", "·": "00000000000000001100011000000000000", "€": "00111010001111001000111100100000111", "$": "00100011111010001110001011111000100", "^": "00100010101000100000000000000000000", "~": "00000000000100010101000100000000000", "{": "00010001000010001000001000010000010", "}": "01000001000010000010001000010001000", "\\": "00000100000100000100000100000100000", "`": "01000001000001000000000000000000000"});
-const OL = { d: null, cv: null, edX: 0, ny: 22, fs: 2, adv: 12, y: 4, inset: 4 };
-function oledInit() {
-  if (!window.DSP) return;
-  try {
-    const cv = document.createElement("canvas"); cv.id = "d1g"; $("d1").appendChild(cv);
-    OL.d = DSP.create(cv, Object.assign({}, OLED, { ny: OL.ny, frameW: 100000 }), { dpr: DPR });   // cornice ovunque fuori dal pannello
-    OL.cv = cv; document.body.classList.add("oled");
-  } catch (e) { OL.d = null; if (OL.cv) OL.cv.remove(); }
-}
-const glyph = (ch) => FONT2[ch] || FONT2[ch.toUpperCase()] || (ch === "\n" ? FONT2["↵"] : FONT2["?"]);
-function oText(x, str, col) {                    // disegna una stringa sulla riga di testo, torna la x finale
-  const c = OL.d.ctx; c.fillStyle = col || "#fff"; const f = OL.fs;
-  for (const ch of str) { const g = glyph(ch); for (let r = 0; r < 7; r++) for (let k = 0; k < 5; k++) if (g[r * 5 + k] === "1") c.fillRect(x + k * f, OL.y + r * f, f, f); x += OL.adv; }
-  return x;
-}
-const oW = (str) => [...str].length * OL.adv;
-function oFit(str, w) { const a = [...str], n = Math.floor((w + 2) / OL.adv); return a.length <= n ? str : a.slice(0, Math.max(0, n - 1)).join("") + "…"; }
-let blinkT = 0;
-function drawD1() {
-  const d = OL.d; if (!d) return;
-  const W = OL.cv.clientWidth, H = OL.cv.clientHeight; if (!W || !H) return;
-  const m = Math.max(1, Math.min(10, Math.floor((H - OL.ny) / 2))), nx = Math.max(16, Math.floor(W - 2 * Math.min(m, 4)));   // ai lati il pannello arriva quasi al bordo
-  d.scale = OLED.pitch / DPR;                    // un punto del display = 1px dello schermo
-  if (d.preset.nx !== nx) d.set({ nx });
-  d.set({ ghostD: OLED.ghostD / d.scale });      // doppia immagine proporzionata al punto
-  const c = d.ctx; c.fillStyle = "#000"; c.fillRect(0, 0, nx, OL.ny);
-  const x0 = OL.inset, x1 = nx - OL.inset;
-  if (land) {                                     // orizzontale: riga di scrittura con cursore e selezione
-    const t = [...draft.text], car = draft.caret, cx = (i) => x0 + i * OL.adv - OL.edX;
-    const vw = x1 - x0, pos = car * OL.adv;
-    if (pos - OL.edX > vw - OL.adv * 2) OL.edX = pos - vw + OL.adv * 3; else if (pos - OL.edX < OL.adv) OL.edX = Math.max(0, pos - OL.adv * 3);
-    oText(cx(0), t.join(""));
-    if (hasSel()) { const [a, b] = selRange(); c.fillStyle = "#fff"; c.fillRect(cx(a) - 1, 2, (b - a) * OL.adv, OL.ny - 4); oText(cx(a), t.slice(a, b).join(""), "#000"); }
-    if (Math.floor(performance.now() / 530) % 2 === 0) { c.fillStyle = "#fff"; c.fillRect(cx(car) - 2, 2, 1, OL.ny - 4); }
-    clearTimeout(blinkT); blinkT = setTimeout(drawD1, 530);
-  } else {
-    const lab = LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, " "), tm = $("d1t").textContent;   // sul display basta uno spazio
-    let x = x0; if (lab) x = oText(x, lab) + OL.adv;
-    if (rec && !msg) {                            // REC: nome, VU a barre da 1 punto, tempo a destra
-      x = oText(x, oFit(val, x1 - x - oW(tm) - OL.adv * 3)) + OL.adv;
-      const tx = x1 - oW(tm) + 2, end = tx - OL.adv, lvn = Math.round((rec.lv || 0) * Math.floor((end - x) / 2));
-      c.fillStyle = "#fff"; for (let i = 0, bx = x; bx < end; i++, bx += 2) { if (i < lvn) c.fillRect(bx, OL.y, 1, 14); else c.fillRect(bx, OL.y + 6, 1, 2); }
-      oText(tx, tm);
-    } else oText(x, oFit(val, x1 - x));
-  }
-  d.render(performance.now());
-}
-
 /* ============ Layout ============ */
 let land = false;
 function layout() {
@@ -1388,7 +1330,6 @@ async function demo() {                        // voci di esempio solo al primis
   ];
   for (const it of list) { await dbPut(it); items.push(it); }
 }
-oledInit();
 (async () => {
   try { db = await idb(); items = await dbAll(); if (!items.length && store.get("jrn1-demo", "") !== "1") { store.set("jrn1-demo", "1"); await demo(); } }
   catch (e) { flash("Memoria non disponibile"); }

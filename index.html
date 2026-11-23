@@ -46,10 +46,16 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .it { position: relative; padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--border-hairline) solid var(--line); }
 .it:first-child { border-top: 0; }
 .it .nm { display: inline-block; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
-.it.sel::after { content: ""; position: absolute; top: 4px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); }   /* nota corrente: pallino in alto a destra */
+.it.sel .nm, .it.sel .ti { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }   /* nota corrente: titolo sottolineato */
+.it .ti { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .it .hd .l { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.it .ck { flex: none; align-self: center; width: 11px; height: 11px; margin-top: -4px; border: var(--border-hairline) solid var(--line); }   /* tasklist: casella 1px */
-.it .ck.on { background: var(--ink); }
+.ic { display: inline-block; flex: none; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; }   /* icona del tipo di cartella, allineata al nome */
+.ic svg { display: block; width: 12px; height: 12px; overflow: visible; }
+.ic path, .ic rect { fill: none; stroke: var(--ink); stroke-width: 1; }
+.ic .on { fill: var(--ink); }
+.it .fd { flex: none; white-space: nowrap; }
+.it .imgs { display: flex; flex-wrap: wrap; gap: 6px; }   /* feed: immagini piccole, affiancate */
+.it .imgs img { width: auto; height: 72px; max-width: 100%; max-height: none; object-fit: contain; }
 .it .ev { font-variant-numeric: tabular-nums; }
 .it.same { border-top: 0; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 4px) top left / 100% 1px no-repeat; }   /* stesso giorno: tratteggio 2px 2px */
 .it .tx { white-space: pre-wrap; word-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
@@ -62,6 +68,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 :root[data-theme="dark"] img.inv { filter: invert(1); }   /* scansioni in grigio/BN: bianco su nero col tema scuro */
 #detail canvas.wf { display: block; width: 100%; height: 80px; }
 #detail .part + .part { margin-top: var(--space-3); }
+#detail .part.ro { outline: var(--border-hairline) solid var(--line); outline-offset: 3px; }   /* ordine pagine: pagina scelta */
 #detail iframe { width: 100%; height: 70vh; border: 0; background: #fff; }
 
 /* Calendario */
@@ -74,12 +81,13 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .cal-g .evd { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }   /* giorno con eventi */
 .cal-n { margin-top: var(--space-3); white-space: pre-wrap; }
 #dirs .dr { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); border: var(--border-hairline) solid transparent; }
-#dirs .dr.sel { border-color: var(--line); }
+#dirs .dr.sel .dn { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .it .hd { display: flex; gap: var(--space-3); align-items: baseline; justify-content: space-between; }
 
 /* Mirino */
 #cam video, #cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #cam video { object-fit: cover; transform-origin: 50% 50%; }
+#cam.full video { object-fit: contain; }   /* FOTO: il mirino mostra tutto il fotogramma che verrà salvato */
 #cam #still, #cam #lv { display: none; }
 #cam #lv { object-fit: cover; }
 #cam.live #lv { display: block; }
@@ -108,6 +116,10 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #ed .car { display: inline-block; width: 0; border-left: var(--border-hairline) solid var(--ink); margin-right: -1px; height: 20px; vertical-align: -4px; animation: blink 1s steps(1) infinite; }
 #ed .sx { background: var(--surface-inverse); color: var(--ink-inverse); }
 @keyframes blink { 50% { visibility: hidden; } }
+/* Display 1 bitmap: font a pixel proporzionale, ogni pixel = 2px */
+#d1b { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+body.bmp #d1 .l1, body.bmp #ed { visibility: hidden; }
+body.bmp #ed .car { display: none; }
 
 /* Controlli: Shift alto quanto la ghiera, LED pieno al centro della curva */
 #ctl { position: relative; flex: none; display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-3) var(--space-2); }
@@ -148,9 +160,7 @@ body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }
 #d2 { margin: 8px 12px 0; }
 .it { padding: 8px 6px 6px; }
 .it .nm { margin-bottom: 8px; }
-.it.sel::after { width: 12px; height: 12px; }
 .it.same { background: repeating-linear-gradient(90deg, var(--line) 0 3px, transparent 3px 6px) top left / 100% 1px no-repeat; }
-.it .ck { width: 12px; height: 12px; }
 .it canvas.wf { height: 24px; }
 #dirs .dr { height: 24px; }
 .cal-g div { height: 28px; }
@@ -165,7 +175,6 @@ body.land #app { grid-template-rows: 0.75fr 1fr 1fr 1fr 1fr 1fr; row-gap: 14px; 
 .k.w15 { flex-grow: 1; }
 body.land #shift { width: 119px; }
 body.land #ctl { gap: 70px; }
-.it .hd { padding-right: 14px; }   /* la cartella resta a sinistra del pallino da 12px */
 </style>
 </head>
 <body>
@@ -345,6 +354,7 @@ function d1() {
   $("d1v").textContent = msg || (M[mode].d1 ? M[mode].d1() : "");
   $("d1t").textContent = rec && !msg ? clock((performance.now() - rec.t0) / 1000) : "";
   $("d1").classList.toggle("meter", !!rec && !msg);
+  drawD1();
 }
 const clock = (s) => Math.floor(s / 60) + ":" + pad(Math.floor(s % 60));
 
@@ -399,7 +409,11 @@ function drawWave(cv, peaks, prog) {          // barre verticali da 1px distanzi
 }
 function partEl(it, k, full) {
   const p = parts(it)[k], d = document.createElement("div"); d.className = "part";
-  if (p.type === "text") { const t = document.createElement("div"); t.className = "tx"; t.textContent = p.text; d.appendChild(t); }
+  if (p.type === "text") {                       // la prima riga della nota è il titolo, già accanto al nome
+    const body = k === 0 && it.type === "text" ? p.text.split("\n").slice(1).join("\n").replace(/^\n+/, "") : p.text;
+    if (!body.trim()) return null;
+    const t = document.createElement("div"); t.className = "tx"; t.textContent = body; d.appendChild(t);
+  }
   else if (p.type === "image") {
     const im = new Image(); im.alt = ""; d.appendChild(im);
     if (p.filter && p.filter !== "originale") { im.className = p.filter === "migliorato" ? "" : "inv"; filteredUrl(it, k).then((u) => (im.src = u)).catch(() => (im.src = urlOf(it, k))); }
@@ -420,18 +434,32 @@ function renderFeed() {
     const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : "") + (i && L[i - 1].name.slice(0, 6) === it.name.slice(0, 6) ? " same" : ""); el.dataset.i = i;
     const hd = document.createElement("div"); hd.className = "hd"; el.appendChild(hd);
     fillHd(hd, it);
-    parts(it).forEach((_, k) => el.appendChild(partEl(it, k)));
+    let row = null;
+    parts(it).forEach((p, k) => {
+      const pe = partEl(it, k); if (!pe) return;
+      if (p.type === "image") { if (!row) { row = document.createElement("div"); row.className = "part imgs"; el.appendChild(row); } row.appendChild(pe.firstChild); }
+      else { row = null; el.appendChild(pe); }
+    });
     feed.appendChild(el);
   });
   showSel(); d1();
 }
-function fillHd(hd, it) {                       // intestazione: [casella] nome [evento] ... cartella
+const ICONS = {                                  // 12px, linee da 1px
+  generica: '<path d="M.5 2.5h4l1.5 1.5h5.5v6.5H.5z"/>',
+  tasklist: '<rect x=".5" y=".5" width="11" height="11"/>',
+  tasklistOn: '<rect class="on" x=".5" y=".5" width="11" height="11"/>',
+  calendar: '<path d="M6 1.5c-2 0-3.2 1.5-3.2 3.6v2.6L1.5 9.5h9L9.2 7.7V5.1C9.2 3 8 1.5 6 1.5zM4.8 11h2.4"/><path d="M.8 3.2C.3 4 .3 6 .8 6.8M11.2 3.2c.5.8.5 2.8 0 3.6"/>',
+};
+function iconEl(type, on) { const s = document.createElement("span"); s.className = "ic" + (type === "tasklist" ? " ck" : ""); s.innerHTML = '<svg viewBox="0 0 12 12">' + ICONS[type === "tasklist" && on ? "tasklistOn" : type] + "</svg>"; return s; }
+const titleOf = (it) => (it.type === "text" && it.text ? it.text.split("\n")[0].trim() : "");
+function fillHd(hd, it) {                       // intestazione: nome [titolo] [evento] ... [icona] cartella
   hd.innerHTML = ""; const l = document.createElement("span"); l.className = "l"; hd.appendChild(l);
   const t = ftype(it);
-  if (t === "tasklist") { const c = document.createElement("span"); c.className = "ck" + (it.done ? " on" : ""); l.appendChild(c); }
   const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = it.name; l.appendChild(nm);
+  const ttl = titleOf(it); if (ttl) { const e = document.createElement("span"); e.className = "ti"; e.textContent = ttl; l.appendChild(e); }
   if (t === "calendar" && it.when) { const e = document.createElement("span"); e.className = "ev"; e.textContent = fmtWhen(it.when); l.appendChild(e); }
-  const fd = document.createElement("span"); fd.className = "fd"; fd.textContent = it.folder || ""; hd.appendChild(fd);
+  const fd = document.createElement("span"); fd.className = "fd"; hd.appendChild(fd);
+  if (it.folder) { fd.appendChild(iconEl(t, it.done)); fd.appendChild(document.createTextNode(it.folder)); }
 }
 function refreshHd(it) { const i = vis().indexOf(it), el = feed.children[i]; if (el) fillHd(el.querySelector(".hd"), it); }
 function setSel(i, force) {
@@ -471,7 +499,7 @@ function jumpDay(dir) {
 }
 feed.addEventListener("click", (e) => {
   const el = e.target.closest(".it"); if (!el) return; audio(); const i = +el.dataset.i;
-  if (e.target.classList.contains("ck") && mode === "consulta") { setSel(i); toggleDone(cur()); return; }
+  if (e.target.closest(".ck") && mode === "consulta") { setSel(i); toggleDone(cur()); return; }
   if (i === sel && mode === "consulta") openDetail(); else { setSel(i); sound("browse"); }
 });
 async function toggleDone(it) { if (!it) return; it.done = !it.done || undefined; await dbPut(it); refreshHd(it); d1(); sound("act"); }
@@ -481,32 +509,68 @@ let player = null, inDetail = false;
 function openDetail() {
   const it = cur(); if (!it) return;
   const dt = $("detail"); dt.innerHTML = ""; dt.scrollTop = 0; inDetail = true; showPane("detail");
-  parts(it).forEach((_, k) => dt.appendChild(partEl(it, k, true)));
-  const firstAudio = parts(it).findIndex((p) => p.type === "audio");
-  if (firstAudio >= 0) playPart(it, firstAudio);
-  dt.onclick = (e) => { const d = e.target.closest(".part[data-k]"); if (d) { audio(); sound("set"); playPart(it, +d.dataset.k, true); } };
+  parts(it).forEach((_, k) => { const pe = partEl(it, k, true); if (pe) dt.appendChild(pe); });
+  dt.onclick = (e) => { const d = e.target.closest(".part[data-k]"); if (d) { audio(); sound("set"); playPart(it, +d.dataset.k); } };
   sound("set"); d1();
 }
-function playPart(it, k, toggle) {
-  if (player && player.k === k && toggle) { player.a.paused ? player.a.play() : player.a.pause(); return; }
-  if (player) player.a.pause();
-  const a = new Audio(urlOf(it, k)), part = $("detail").querySelector('.part[data-k="' + k + '"]'), cv = part.querySelector("canvas"), tl = part.querySelector(".fl"), p = parts(it)[k];
-  player = { a, k };
-  const upd = () => { if (!player || player.a !== a) return; drawWave(cv, p.peaks, a.duration ? a.currentTime / a.duration : 0); tl.textContent = clock(a.currentTime) + " / " + clock(isFinite(a.duration) ? a.duration : p.dur || 0); if (!a.paused) requestAnimationFrame(upd); };
-  a.onplay = upd; a.onpause = upd; a.onseeked = upd; a.play().catch(() => {}); requestAnimationFrame(upd);
+function audioInView() {                       // l'audio più vicino al centro della nota visibile
+  const dt = $("detail"), mid = dt.scrollTop + dt.clientHeight / 2; let best = null, bd = 1e9;
+  for (const d of dt.querySelectorAll(".part[data-k]")) { const c = d.offsetTop + d.offsetHeight / 2, dd = Math.abs(c - mid); if (dd < bd) { bd = dd; best = +d.dataset.k; } }
+  return best;
 }
-function closeDetail() { if (player) { player.a.pause(); player = null; } inDetail = false; showPane("feed"); sound("menu"); d1(); }
-function detailDial(dir) {
-  if (player && player.a.duration) { player.a.currentTime = Math.max(0, Math.min(player.a.duration, player.a.currentTime + dir * 2)); return true; }
-  const dt = $("detail"), o = dt.scrollTop; dt.scrollTop += dir * 44; return dt.scrollTop !== o;
+/* Riproduzione come un nastro: la velocità sale e scende con inerzia, e la ghiera trascina il nastro
+   avanti e indietro cambiando anche l'altezza del suono (pitch bend) */
+function tapeStop() { if (!player) return; if (player.src) try { player.src.stop(); } catch (e) {} cancelAnimationFrame(player.raf); player = null; }
+function tapePlay() { if (!player) return; if (player.pos >= player.dur - 0.05) player.pos = 0; player.playing = true; tapeRun(); }
+function tapePause() { if (player) player.playing = false; }
+function tapeScrub(px) { if (!player) return; player.vel = Math.max(-8, Math.min(8, player.vel + px * 0.025)); tapeRun(); }
+async function playPart(it, k) {
+  if (player && player.it === it && player.k === k) { player.playing ? tapePause() : tapePlay(); return; }
+  tapeStop(); const a = audio(); if (!a) return;
+  const p = parts(it)[k], part = $("detail").querySelector('.part[data-k="' + k + '"]'); if (!part) return;
+  let buf; try { buf = await a.decodeAudioData(await p.blob.arrayBuffer()); } catch (e) { flash("Audio non leggibile"); sound("stop"); return; }
+  const rev = a.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) { const s0 = buf.getChannelData(ch), d = rev.getChannelData(ch), n = s0.length; for (let i = 0; i < n; i++) d[i] = s0[n - 1 - i]; }
+  const out = a.createGain(); out.connect(a.destination);
+  player = { it, k, buf, rev, out, src: null, dir: 0, pos: 0, rate: 0, vel: 0, playing: true, dur: buf.duration, last: 0, raf: 0, cv: part.querySelector("canvas"), tl: part.querySelector(".fl"), peaks: p.peaks };
+  tapeRun();
 }
+function tapeRun() {
+  const P = player; if (!P || P.raf) return; P.last = performance.now();
+  const tick = () => {
+    if (player !== P) return;
+    const now = performance.now(), dt = Math.min(0.05, (now - P.last) / 1000); P.last = now;
+    const want = (P.playing ? 1 : 0) + P.vel; P.vel *= Math.exp(-dt * 5);
+    P.rate += (want - P.rate) * Math.min(1, dt * 10);          // inerzia del nastro: partenze e fermate scivolano di tono
+    P.pos += P.rate * dt;
+    if (P.pos >= P.dur) { P.pos = P.dur; P.playing = false; P.rate = Math.min(P.rate, 0); P.vel = Math.min(P.vel, 0); }
+    if (P.pos <= 0) { P.pos = 0; P.rate = Math.max(P.rate, 0); P.vel = Math.max(P.vel, 0); }
+    const dir = Math.abs(P.rate) < 0.02 ? 0 : P.rate > 0 ? 1 : -1, a = actx;
+    if (dir !== P.dir) {
+      if (P.src) { try { P.src.stop(); } catch (e) {} P.src = null; }
+      if (dir) { const s = a.createBufferSource(); s.buffer = dir > 0 ? P.buf : P.rev; s.playbackRate.value = Math.abs(P.rate); s.connect(P.out); s.start(0, dir > 0 ? P.pos : P.dur - P.pos); P.src = s; }
+      P.dir = dir;
+    } else if (P.src) P.src.playbackRate.value = Math.abs(P.rate);
+    drawWave(P.cv, P.peaks, P.pos / P.dur); P.tl.textContent = clock(P.pos) + " / " + clock(P.dur);
+    if (!P.playing && !dir && Math.abs(P.vel) < 0.02) { P.raf = 0; P.rate = 0; return; }
+    P.raf = requestAnimationFrame(tick);
+  };
+  P.raf = requestAnimationFrame(tick);
+}
+function closeDetail() { tapeStop(); inDetail = false; showPane("feed"); sound("menu"); d1(); }
+function detailScroll(px) { const dt = $("detail"), o = dt.scrollTop; dt.scrollTop += px; return dt.scrollTop !== o; }
+function detailDial(dir) { return detailScroll(dir * 44); }
 
 /* ---- CONSULTA ---- */
 let evEdit = null;                                    // nota di una cartella calendar: data dell'evento in modifica
 const pre = () => (qf ? qf + "  " : "");
 M.consulta = {
   leave() { if (inDetail) closeDetail(); evEdit = null; },
-  scroll(px) { return inDetail || evEdit ? null : smoothScroll(px); },   // ghiera: scorrimento continuo
+  scroll(px) {                                 // ghiera: scorrimento continuo; con l'audio in riproduzione trascina il nastro
+    if (evEdit) return null;
+    if (inDetail) { if (player && player.playing) { tapeScrub(px); return true; } return detailScroll(px); }
+    return smoothScroll(px);
+  },
   dial(d) { if (evEdit) { evEdit.t = new Date(evEdit.t.getFullYear(), evEdit.t.getMonth(), evEdit.t.getDate() + d, evEdit.t.getHours(), evEdit.t.getMinutes()); d1(); return true; } return inDetail ? detailDial(d) : setSel(sel + d); },
   sdial(d) {                                   // Shift + ghiera: cambia cartella (o l'ora dell'evento)
     if (evEdit) { evEdit.t = new Date(evEdit.t.getTime() + d * 15 * 60000); d1(); return true; }
@@ -526,7 +590,7 @@ M.consulta = {
   },
   async shift() {
     const it = cur();
-    if (inDetail) { closeDetail(); return; }
+    if (inDetail) { const k = audioInView(); if (k == null) { sound("stop"); return; } playPart(cur(), k); sound("set"); return; }   // Shift: suona/ferma l'audio
     if (evEdit) { evEdit.it.when = whenStr(evEdit.t); await dbPut(evEdit.it); refreshHd(evEdit.it); evEdit = null; sound("act"); d1(); return; }
     if (ftype(it) === "tasklist") return toggleDone(it);
     if (ftype(it) === "calendar") { const d = ymdDate(it.name.slice(0, 6)); evEdit = { it, t: it.when ? whenDate(it.when) : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0) }; sound("set"); d1(); return; }
@@ -534,7 +598,7 @@ M.consulta = {
   },
   d1() {
     if (evEdit) return "evento " + fmtWhen(evEdit.t);
-    const it = cur(); return pre() + (it ? it.name + (ftype(it) === "tasklist" && it.done ? "  fatto" : "") : "");
+    const it = cur(); return (qf || "") + (it && ftype(it) === "tasklist" && it.done ? (qf ? "  " : "") + "fatto" : "");
   },
 };
 
@@ -582,7 +646,7 @@ let dirSel = 0, dirOpen = null;
 const dirRows = () => S.folders.concat(["+"]);
 function renderDirs() {
   const R = dirRows(); dirSel = Math.max(0, Math.min(R.length - 1, dirSel));
-  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? "+ nuova" : esc(f)) + "</span><span>" + (f === "+" ? "" : (S.ftypes[f] ? S.ftypes[f] + "  " : "") + items.filter((x) => x.folder === f).length) + "</span></div>").join("");
+  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? '<span class="dn">+ nuova</span>' : iconEl(S.ftypes[f] || "generica").outerHTML + '<span class="dn">' + esc(f) + "</span>") + "</span><span>" + (f === "+" ? "" : items.filter((x) => x.folder === f).length) + "</span></div>").join("");
   const el = $("dirs").children[dirSel]; if (el) el.scrollIntoView({ block: "nearest" });
 }
 $("dirs").addEventListener("click", (e) => { const r = e.target.closest(".dr"); if (!r) return; audio(); const i = +r.dataset.i; if (i === dirSel) M.cartelle.shift(); else { dirSel = i; renderDirs(); d1(); sound("browse"); } });
@@ -617,7 +681,7 @@ M.cartelle = {
   },
   center() { if (dirOpen) { dirOpen = null; S.filter = null; showPane("dirs"); renderDirs(); renderFeed(); sound("menu"); d1(); } else if (dirConfirm) { dirConfirm = false; d1(); sound("menu"); } else this.shift(); },
   d1() {
-    if (dirOpen) { const it = cur(); return dirOpen + (it ? "  " + it.name : ""); }
+    if (dirOpen) return dirOpen;
     const f = dirRows()[dirSel], a = dirActs(f)[dirAct] || ["apri"];
     return (f === "+" ? "" : f + "  ") + actLabel(a, f) + (dirConfirm ? "  conferma?" : "");
   },
@@ -625,18 +689,41 @@ M.cartelle = {
 function renderFeedKeep() { const it = cur(); renderFeed(); if (it) setSel(Math.max(0, vis().indexOf(it)), true); }
 
 /* ---- EDIT ---- */
-const EDIT_ACT = [["testo", "modifica testo"], ["audio", "aggiungi audio"], ["foto", "aggiungi foto"], ["file", "aggiungi file"], ["filtro", "filtro scansione"]];
+const EDIT_ACT = [["testo", "modifica testo"], ["audio", "aggiungi audio"], ["foto", "aggiungi foto"], ["pagine", "aggiungi pagine"], ["ordine", "ordine pagine"], ["file", "aggiungi file"], ["filtro", "filtro scansione"]];
+const PF = ["type", "ext", "mime", "blob", "text", "filter", "peaks", "dur", "orig"];
+async function setParts(it, list) {               // riscrive le parti di una nota nel nuovo ordine (la prima è la nota stessa)
+  const L = list.map((p) => { const o = {}; for (const f of PF) if (p[f] !== undefined) o[f] = p[f]; return o; });
+  for (const f of PF) delete it[f]; Object.assign(it, L[0]); it.att = L.slice(1); if (!it.att.length) delete it.att;
+  for (const k of [...urls.keys()]) if (k.startsWith(it.name + "#")) { URL.revokeObjectURL(urls.get(k)); urls.delete(k); }
+  await dbPut(it);
+}
+let RO = null;                                     // ordine pagine: { it, k }
+function renderRO() {
+  const dt = $("detail"), it = RO.it; dt.innerHTML = ""; showPane("detail");
+  parts(it).forEach((_, k) => { const pe = partEl(it, k, true) || document.createElement("div"); pe.classList.add("part"); if (k === RO.k) pe.classList.add("ro"); dt.appendChild(pe); });
+  const el = dt.querySelector(".ro"); if (el) el.scrollIntoView({ block: "nearest" }); d1();
+}
 let editAct = 0, confirmDel = false, editTarget = null;
 M.edit = {
-  enter() { confirmDel = false; },
-  dial(d) { confirmDel = false; return setSel(sel + d); },
-  sdial(d) { confirmDel = false; editAct = (editAct + d + EDIT_ACT.length) % EDIT_ACT.length; d1(); return true; },
-  center() { this.sdial(1); sound("browse"); },
+  enter() { confirmDel = false; RO = null; },
+  leave() { if (RO) { RO = null; showPane("feed"); } },
+  dial(d) { if (RO) { const n = parts(RO.it).length, j = RO.k + d; if (j < 0 || j >= n) return false; RO.k = j; renderRO(); return true; } confirmDel = false; return setSel(sel + d); },
+  async sdial(d) {
+    if (RO) {                                     // Shift + ghiera: sposta la pagina scelta
+      const L = parts(RO.it).slice(), j = RO.k + d; if (j < 0 || j >= L.length) return false;
+      [L[RO.k], L[j]] = [L[j], L[RO.k]]; await setParts(RO.it, L); RO.k = j; renderRO(); return true;
+    }
+    confirmDel = false; editAct = (editAct + d + EDIT_ACT.length) % EDIT_ACT.length; d1(); return true;
+  },
+  center() { if (RO) { this.shift(); return; } this.sdial(1); sound("browse"); },
   async shift() {
+    if (RO) { const it = RO.it; RO = null; showPane("feed"); renderFeed(); setSel(Math.max(0, vis().indexOf(it)), true); sound("act"); return; }
     const it = cur(), a = EDIT_ACT[editAct][0]; if (!it) { sound("stop"); return; }
     if (a === "testo") { flash("Ruota il telefono"); sound("set"); }
     else if (a === "audio") { rec ? recStop() : recStart(it); }
-    else if (a === "foto") { pickTarget = it; pick("image/*", true); }
+    else if (a === "foto") { setMode("foto"); FS.target = it; FS.ret = "edit"; d1(); }   // fotocamera dell'app
+    else if (a === "pagine") { setMode("scansione"); SC.doc = it; SC.pages = parts(it).length; SC.ret = "edit"; d1(); }
+    else if (a === "ordine") { if (parts(it).length < 2) { sound("stop"); return; } RO = { it, k: 0 }; renderRO(); sound("set"); }
     else if (a === "file") { pickTarget = it; pick("", false); }
     else if (a === "filtro") {
       const sc = parts(it).filter((p) => p.filter); if (!sc.length) { sound("stop"); return; }
@@ -644,7 +731,7 @@ M.edit = {
       await dbPut(it); renderFeed(); flash(it.name + "  " + nf); sound("set");
     }
   },
-  d1() { const it = cur(); return (it ? it.name + "  " : "") + (confirmDel ? "conferma?" : EDIT_ACT[editAct][1]); },
+  d1() { if (RO) return "pagina " + (RO.k + 1) + "/" + parts(RO.it).length; return confirmDel ? "conferma?" : EDIT_ACT[editAct][1]; },
 };
 
 /* ---- ELIMINA: ghiera sceglie la voce, Shift + ghiera la parte (tutto o un allegato), Shift due volte elimina ---- */
@@ -662,7 +749,7 @@ M.elimina = {
     else { it.att.splice(delPart - 1, 1); for (const k of [...urls.keys()]) if (k.startsWith(it.name + "#")) { URL.revokeObjectURL(urls.get(k)); urls.delete(k); } await dbPut(it); flash("Eliminato " + it.name + "_" + String.fromCharCode(96 + delPart)); delPart = 0; }
     renderFeed(); sound("act");
   },
-  d1() { const it = cur(); if (!it) return ""; return it.name + "  " + (delPart ? "_" + String.fromCharCode(96 + delPart) : "tutto") + (delConfirm ? "  conferma?" : ""); },
+  d1() { const it = cur(); if (!it) return ""; return (delPart ? "allegato " + String.fromCharCode(96 + delPart) : "tutto") + (delConfirm ? "  conferma?" : ""); },
 };
 
 /* ---- ARCHIVIO (impostazioni nel Display 1) ---- */
@@ -765,14 +852,14 @@ function meter() {
     c.clearRect(0, 0, d1c.width, H); c.fillStyle = ink();     // barre verticali 1px distanziate 1px: accese a tutta altezza, spente 1px
     for (let i = 0; i < N; i++) { const bh = i < on ? H : px; c.fillRect(i * 2 * px, Math.round((H - bh) / 2), px, bh); }
   }
-  if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); }
+  if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); } else drawD1();
   requestAnimationFrame(meter);
 }
 M.registra = {
   dial(d) { return setSel(sel + d); }, sdial(d) { return jumpDay(d); },
   center() { if (!rec) openDetailFrom(); },
   shift() { rec ? recStop() : recStart(null); },
-  d1() { return rec ? rec.name : nextName(); },
+  d1() { return ""; },
   leave() {},
 };
 function openDetailFrom() { setMode("consulta"); openDetail(); }
@@ -792,7 +879,7 @@ async function camStart() {
 function camStop() { if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; track = null; vid.srcObject = null; cam.classList.remove("frozen"); }
 document.addEventListener("visibilitychange", () => { if (document.hidden) { camStop(); if (rec) recStop(); } else if (mode === "foto" || mode === "scansione") camStart(); });
 function coverMap() {                          // coordinate del fotogramma → coordinate del riquadro (object-fit: cover)
-  const vw = vid.videoWidth || 1, vh = vid.videoHeight || 1, W = cam.clientWidth, H = cam.clientHeight, z = mode === "foto" ? FS.zoomSoft : 1, s = Math.max(W / vw, H / vh) * z;
+  const vw = vid.videoWidth || 1, vh = vid.videoHeight || 1, W = cam.clientWidth, H = cam.clientHeight, z = mode === "foto" ? FS.zoomSoft : 1, s = (mode === "foto" ? Math.min(W / vw, H / vh) : Math.max(W / vw, H / vh)) * z;
   return { s, ox: (W - vw * s) / 2, oy: (H - vh * s) / 2 };
 }
 function sizeOv() { const W = cam.clientWidth, H = cam.clientHeight; if (ov.width !== Math.round(W * DPR)) { ov.width = Math.round(W * DPR); ov.height = Math.round(H * DPR); } return ov.getContext("2d"); }
@@ -826,8 +913,7 @@ function drawFotoOv() {
 async function grabFrame(soft) {                 // fotogramma alla risoluzione piena del flusso
   const vw = vid.videoWidth, vh = vid.videoHeight; if (!vw) throw new Error("mirino non pronto");
   let sx = 0, sy = 0, sw = vw, sh = vh;
-  if (soft) {                                    // ritaglio come nel mirino: proporzioni del riquadro e zoom digitale
-    const W = cam.clientWidth, H = cam.clientHeight, ar = W / H; if (vw / vh > ar) { sw = vh * ar; } else { sh = vw / ar; }
+  if (soft && FS.zoomSoft > 1) {                 // foto intera del sensore; si ritaglia solo con lo zoom digitale
     sw /= FS.zoomSoft; sh /= FS.zoomSoft; sx = (vw - sw) / 2; sy = (vh - sh) / 2;
   }
   const c = canvasOf(Math.round(sw), Math.round(sh)), x = c.getContext("2d");
@@ -836,8 +922,8 @@ async function grabFrame(soft) {                 // fotogramma alla risoluzione 
 }
 const toBlob = (c, q) => new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("codifica non riuscita"))), "image/jpeg", q || 0.9));
 M.foto = {
-  enter() { showPane("cam"); camStart().then(applyCam); },
-  leave() { camStop(); drawFotoOv(); },
+  enter() { showPane("cam"); cam.classList.add("full"); camStart().then(applyCam); },
+  leave() { camStop(); cam.classList.remove("full"); FS.target = null; drawFotoOv(); },
   dial(d) {
     const s = fotoSettings()[FS.set % fotoSettings().length].k;
     if (s === "zoom") { const mx = camCaps.zoom ? Math.min(camCaps.zoom.max, 10) : 5, mn = camCaps.zoom ? Math.max(1, camCaps.zoom.min) : 1, v = Math.round((FS.zoom + d * 0.1) * 10) / 10; if (v < mn || v > mx) return false; FS.zoom = v; }
@@ -849,7 +935,14 @@ M.foto = {
   sdial(d) { const n = fotoSettings().length; FS.set = (FS.set + d + n) % n; d1(); return true; },
   center() { this.sdial(1); sound("browse"); },
   async shift() {
-    try { const c = await grabFrame(true); const b = await toBlob(c, 0.9); freeCanvas(c); sound("act"); await addItem({ type: "image", ext: "jpg", mime: "image/jpeg", blob: b }); }
+    try {
+      let b = null;
+      if (window.ImageCapture && track && FS.zoomSoft === 1 && !(FS.ev && !camCaps.exposureCompensation)) { try { b = await new ImageCapture(track).takePhoto(); } catch (e) { b = null; } }   // risoluzione massima del sensore
+      if (!b) { const c = await grabFrame(true); b = await toBlob(c, 0.92); freeCanvas(c); }
+      sound("act"); const part = { type: "image", ext: "jpg", mime: b.type || "image/jpeg", blob: b };
+      if (FS.target) { const it = FS.target, r = FS.ret; FS.target = null; await attach(it, part); setMode(r || "edit"); setSel(Math.max(0, vis().indexOf(it)), true); }
+      else await addItem(part);
+    }
     catch (e) { flash("Errore: " + (e.message || e)); sound("stop"); }
   },
   d1() { const L = fotoSettings(); return L[FS.set % L.length].l(); },
@@ -867,15 +960,8 @@ function scanLoop() {
     const s = 640 / Math.max(vid.videoWidth, vid.videoHeight), w = Math.round(vid.videoWidth * s), h = Math.round(vid.videoHeight * s);
     if (lv.width !== w || lv.height !== h) { lv.width = w; lv.height = h; }
     const x = lv.getContext("2d", { willReadFrequently: true }); x.drawImage(vid, 0, 0, w, h);
-    const q = detectPage(lv);
-    if (q) {                                   // contorno ammorbidito: segue il foglio senza tremare
-      const n = q.c.map((p) => [p[0] / s, p[1] / s]);
-      SC.live = SC.live && performance.now() - SC.seen < 800 ? { c: SC.live.c.map((p, i) => [p[0] * 0.45 + n[i][0] * 0.55, p[1] * 0.45 + n[i][1] * 0.55]) } : { c: n };
-      SC.seen = performance.now();
-    } else if (performance.now() - SC.seen > 800) SC.live = null;
     if (S.scanFilter !== "originale") x.putImageData(enhance(x.getImageData(0, 0, w, h), S.scanFilter), 0, 0);
     cam.classList.toggle("live", S.scanFilter !== "originale");
-    drawScanOv();
   }
   SC.timer = setTimeout(scanLoop, Math.max(60, 160 - (performance.now() - t0)));
 }
@@ -891,7 +977,7 @@ function liveQuad() {                         // senza foglio riconosciuto: il r
 }
 function drawScanOv() {
   const c = sizeOv(); c.clearRect(0, 0, ov.width, ov.height); c.strokeStyle = "#fff"; c.fillStyle = "#fff"; c.lineWidth = DPR;
-  const q = SC.frozen ? SC.quad && SC.quad.c : vid.videoWidth ? liveQuad() : null; if (!q) return;
+  const q = SC.frozen && SC.quad && SC.quad.c; if (!q) return;   // il contorno compare solo dopo lo scatto
   const m = SC.frozen ? stillMap() : coverMap(), P = q.map((p) => [(p[0] * m.s + m.ox) * DPR, (p[1] * m.s + m.oy) * DPR]);
   const path = () => { c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath(); };
   // linea bianca da 1px affiancata da una nera: si vede sia sul foglio chiaro sia sul tavolo scuro
@@ -900,11 +986,15 @@ function drawScanOv() {
     if (!SC.live) { c.save(); c.setLineDash([4 * DPR, 4 * DPR]); c.strokeStyle = "#000"; c.lineDashOffset = 4 * DPR; path(); c.stroke(); c.restore(); }
     for (const p of P) { c.fillStyle = "#000"; c.fillRect(p[0] - 4 * DPR, p[1] - 4 * DPR, 9 * DPR, 9 * DPR); c.fillStyle = "#fff"; c.fillRect(p[0] - 3 * DPR, p[1] - 3 * DPR, 7 * DPR, 7 * DPR); }
   }
-  if (SC.frozen) for (const p of P) { c.beginPath(); c.arc(p[0], p[1], 12 * DPR, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(p[0], p[1], 2.5 * DPR, 0, Math.PI * 2); c.fill(); }
-  if (SC.frozen && SC.drag >= 0) {              // lente: ingrandisce l'angolo che si sta spostando, sopra il dito
-    const q0 = q[SC.drag], R = 56 * DPR, Z = 4, p = P[SC.drag];
-    let lx = p[0], ly = p[1] - 110 * DPR; if (ly < R + 4 * DPR) ly = p[1] + 110 * DPR;
-    lx = Math.max(R + 4 * DPR, Math.min(ov.width - R - 4 * DPR, lx));
+  const se = SC.sel || { t: "c", i: 0 };
+  P.forEach((p, i) => { const on = se.t === "c" && se.i === i; c.beginPath(); c.arc(p[0], p[1], 12 * DPR, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(p[0], p[1], (on ? 6 : 2.5) * DPR, 0, Math.PI * 2); c.fill(); });
+  if (se.t === "s") {                             // lato scelto: segmento evidenziato con un pallino al centro
+    const A = P[se.i], B = P[(se.i + 1) % 4]; c.save(); c.lineWidth = 3 * DPR; c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke(); c.restore();
+    c.beginPath(); c.arc((A[0] + B[0]) / 2, (A[1] + B[1]) / 2, 6 * DPR, 0, Math.PI * 2); c.fill();
+  }
+  {                                               // lente fissa in alto a sinistra: ingrandisce l'angolo (o il centro del lato) scelto
+    const q0 = se.t === "c" ? q[se.i] : [(q[se.i][0] + q[(se.i + 1) % 4][0]) / 2, (q[se.i][1] + q[(se.i + 1) % 4][1]) / 2], R = 48 * DPR, Z = 4;
+    const lx = R + 8 * DPR, ly = R + 8 * DPR;
     const src = R / (m.s * DPR * Z);              // raggio della lente in pixel del fotogramma
     c.save(); c.beginPath(); c.arc(lx, ly, R, 0, Math.PI * 2); c.clip();
     c.fillStyle = "#000"; c.fillRect(lx - R, ly - R, 2 * R, 2 * R);
@@ -925,7 +1015,7 @@ ov.addEventListener("pointerdown", (e) => {
   if (mode !== "scansione" || !SC.frozen) return; e.preventDefault(); ov.setPointerCapture(e.pointerId);
   const b = ov.getBoundingClientRect(), m = stillMap(), x = e.clientX - b.left, y = e.clientY - b.top; let best = -1, bd = 44;
   SC.quad.c.forEach((p, i) => { const d = Math.hypot(p[0] * m.s + m.ox - x, p[1] * m.s + m.oy - y); if (d < bd) { bd = d; best = i; } });
-  SC.drag = best; if (best >= 0) { audio(); sound("set"); drawScanOv(); }
+  SC.drag = best; if (best >= 0) { SC.sel = { t: "c", i: best }; audio(); sound("set"); drawScanOv(); d1(); }
 });
 ov.addEventListener("pointermove", (e) => {
   if (SC.drag < 0) return; const b = ov.getBoundingClientRect(), m = stillMap();
@@ -933,7 +1023,7 @@ ov.addEventListener("pointermove", (e) => {
   SC.quad.c[SC.drag] = [x, y]; SC.quad.m = [[0, 0], [0, 0], [0, 0], [0, 0]]; drawScanOv();
 });
 ["pointerup", "pointercancel"].forEach((t) => ov.addEventListener(t, () => { if (SC.drag >= 0) sound("detent"); SC.drag = -1; drawScanOv(); }));
-function freezeScan(src, quad) { SC.src = src; SC.quad = quad || detectPage(src) || fullQuad(src.width, src.height); SC.frozen = true; cam.classList.add("frozen"); drawStill(); drawScanOv(); d1(); }
+function freezeScan(src, quad) { SC.sel = { t: "c", i: 0 }; SC.src = src; SC.quad = quad || detectPage(src) || fullQuad(src.width, src.height); SC.frozen = true; cam.classList.add("frozen"); drawStill(); drawScanOv(); d1(); }
 function unfreezeScan() {
   SC.frozen = false; cam.classList.remove("frozen"); freeCanvas(SC.src); SC.src = null;
   if (SC.queue.length) nextImport(); else drawScanOv();
@@ -951,11 +1041,23 @@ const fimg = document.createElement("input"); fimg.type = "file"; fimg.accept = 
 fimg.addEventListener("change", () => { SC.queue = [...fimg.files]; fimg.value = ""; if (mode === "scansione" && !SC.frozen) nextImport(); });
 M.scansione = {
   enter() { showPane("cam"); vid.style.transform = ""; vid.style.filter = ""; SC.srcMode = "camera"; camStart().then(() => scanLoop()); },
-  leave() { clearTimeout(SC.timer); SC.frozen = false; SC.queue = []; SC.live = null; SC.doc = null; SC.pages = 0; freeCanvas(SC.src); SC.src = null; camStop(); cam.classList.remove("live", "frozen"); sizeOv().clearRect(0, 0, ov.width, ov.height); },
+  leave() { clearTimeout(SC.timer); SC.frozen = false; SC.queue = []; SC.live = null; SC.doc = null; SC.ret = null; SC.pages = 0; freeCanvas(SC.src); SC.src = null; camStop(); cam.classList.remove("live", "frozen"); sizeOv().clearRect(0, 0, ov.width, ov.height); },
   dial(d) { const i = FILTERS.indexOf(S.scanFilter); S.scanFilter = FILTERS[(i + d + FILTERS.length) % FILTERS.length]; saveS(); if (SC.frozen) drawStill(); d1(); return true; },
   sdial(d) { SC.srcMode = SC.srcMode === "camera" ? "importa" : "camera"; d1(); return true; },   // Shift + ghiera: fotocamera o importa
+  pad(dx, dy) {                               // ghiera come trackpad sull'angolo/lato scelto
+    if (dx === undefined) return SC.frozen;
+    const m = stillMap(), k = 0.5 / m.s, se = SC.sel || { t: "c", i: 0 }, idx = se.t === "c" ? [se.i] : [se.i, (se.i + 1) % 4];
+    for (const i of idx) { const p = SC.quad.c[i]; SC.quad.c[i] = [Math.max(0, Math.min(SC.src.width, p[0] + dx * k)), Math.max(0, Math.min(SC.src.height, p[1] + dy * k))]; }
+    SC.quad.m = [[0, 0], [0, 0], [0, 0], [0, 0]]; drawScanOv(); return true;
+  },
+  tap(z, z8) {                                 // clic sulla ghiera: diagonali = angoli, su/giù/sx/dx = lati
+    if (!SC.frozen) return false;
+    const C = { ul: 0, ur: 1, dr: 2, dl: 3 }, L = { u: 0, r: 1, d: 2, l: 3 };
+    SC.sel = z8 in C ? { t: "c", i: C[z8] } : { t: "s", i: L[z8] }; drawScanOv(); d1(); return true;
+  },
   center() {                                  // scarta il fotogramma, oppure chiude il documento
     if (SC.frozen) { unfreezeScan(); sound("menu"); }
+    else if (SC.ret) { const r = SC.ret, it = SC.doc; SC.ret = null; setMode(r); if (it) setSel(Math.max(0, vis().indexOf(it)), true); sound("menu"); return; }   // torna in EDIT
     else if (SC.doc) { flash("Chiuso " + SC.doc.name); SC.doc = null; SC.pages = 0; sound("menu"); }
     d1();
   },
@@ -963,8 +1065,7 @@ M.scansione = {
     try {
       if (!SC.frozen) {                       // 1. congela e propone il contorno, regolabile trascinando gli angoli
         if (SC.srcMode === "importa") { fimg.click(); sound("set"); return; }
-        const src = await grabFrame(false), s = src.width / vid.videoWidth;
-        freezeScan(src, SC.live ? { c: SC.live.c.map((p) => [p[0] * s, p[1] * s]), m: [[0, 0], [0, 0], [0, 0], [0, 0]] } : null); sound("set"); return;
+        freezeScan(await grabFrame(false)); sound("set"); return;
       }
       flash("Raddrizzo…"); await new Promise((r) => setTimeout(r, 30));   // 2. raddrizza, filtra e salva la pagina
       const img = warp(SC.src, SC.quad, 2400);            // si salva solo ritagliata e raddrizzata: il filtro resta un'informazione
@@ -974,7 +1075,10 @@ M.scansione = {
       SC.pages = parts(SC.doc).length; unfreezeScan(); d1();
     } catch (e) { flash("Errore: " + (e.message || e)); sound("stop"); }
   },
-  d1() { return (SC.doc ? SC.doc.name : nextName()) + "  p." + (SC.pages + 1) + "  " + S.scanFilter + (SC.srcMode === "importa" && !SC.frozen ? "  importa" : ""); },
+  d1() {
+    const se = SC.sel || { t: "c", i: 0 }, EL = ["angolo alto sx", "angolo alto dx", "angolo basso dx", "angolo basso sx"], SL = ["lato alto", "lato destro", "lato basso", "lato sinistro"];
+    return "p." + (SC.pages + 1) + "  " + S.scanFilter + (SC.frozen ? "  " + (se.t === "c" ? EL[se.i] : SL[se.i]) : SC.srcMode === "importa" ? "  importa" : "");
+  },
 };
 
 /* ---- FILE: nome proposto con la data del file, la ghiera la cambia ---- */
@@ -1039,11 +1143,18 @@ function step(dir) {
 }
 dial.addEventListener("pointerdown", (e) => {
   e.preventDefault(); dial.setPointerCapture(e.pointerId); audio();
-  const p = dialPos(e); D.id = e.pointerId; D.moved = false; D.acc = 0; D.lastA = p.a; D.center = p.r < 0.36; D.r = p.r; D.a = p.a;
+  const p = dialPos(e); D.id = e.pointerId; D.moved = false; D.acc = 0; D.lastA = p.a; D.center = p.r < 0.36; D.r = p.r; D.a = p.a; D.px = e.clientX; D.py = e.clientY; D.tp = false;
   if (D.center) sound("set");
 });
 dial.addEventListener("pointermove", (e) => {
-  if (D.id !== e.pointerId || D.center) return;
+  if (D.id !== e.pointerId) return;
+  if (M[mode].pad && M[mode].pad()) {          // trackpad: il dito sposta l'angolo o il lato scelto
+    const dx = e.clientX - D.px, dy = e.clientY - D.py;
+    if (!D.tp && Math.hypot(dx, dy) > 6) { D.tp = true; D.moved = true; D.center = false; D.px = e.clientX; D.py = e.clientY; return; }
+    if (D.tp) { M[mode].pad(dx, dy); D.px = e.clientX; D.py = e.clientY; }
+    return;
+  }
+  if (D.center) return;
   const p = dialPos(e); let da = p.a - D.lastA; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
   D.lastA = p.a; D.acc += da; D.rot += da;
   if (!D.moved && Math.abs(D.acc) > 0.17) D.moved = true;
@@ -1054,11 +1165,12 @@ dial.addEventListener("pointermove", (e) => {
 });
 function dialUp(e) {
   if (D.id !== e.pointerId) return; D.id = null;
-  if (D.center && M[mode].center) M[mode].center();
+  if (D.tp) { sound("detent"); }
+  else if (D.center && M[mode].center) M[mode].center();
   else if (!D.moved && D.r < 1.1) {             // clic sulla corona: su, giù, sinistra, destra
     const a = D.a, z = Math.abs(a) < Math.PI / 4 ? "r" : Math.abs(a) > (3 * Math.PI) / 4 ? "l" : a > 0 ? "d" : "u", h = M[mode];
-    let ok = false;
-    if (h.tap) ok = h.tap(z); else if ((z === "u" || z === "d") && h.dial) ok = h.dial(z === "u" ? -1 : 1);
+    let ok = false; const z8 = ["r", "dr", "d", "dl", "l", "ul", "u", "ur"][((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
+    if (h.tap) ok = h.tap(z, z8); else if ((z === "u" || z === "d") && h.dial) ok = h.dial(z === "u" ? -1 : 1);
     sound(ok ? "browse" : "stop");
   }
   d1();
@@ -1142,6 +1254,7 @@ const ed = $("ed");
 function esc(s) { return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])).replace(/\n/g, "↵"); }
 function renderEd() {
   if (!editTarget) store.set("jrn1-draft", draft.text);
+  drawD1();
   const t = draft.text, c = draft.caret; let h;
   if (hasSel()) { const [a, b] = selRange(); h = esc(t.slice(0, a)) + (c === a ? '<span class="car"></span>' : "") + '<span class="sx">' + esc(t.slice(a, b)) + "</span>" + (c === b ? '<span class="car"></span>' : "") + esc(t.slice(b)); }
   else h = esc(t.slice(0, c)) + '<span class="car"></span>' + esc(t.slice(c));
@@ -1297,6 +1410,66 @@ $("fzip").addEventListener("change", async (ev) => {
   } catch (e) { flash("ZIP non leggibile"); sound("stop"); }
 });
 
+/* ============ Display 1 bitmap (font a pixel proporzionale, come i registratori digitali) ============ */
+const PXF = {"0":"011101000110011101011100110001011100000000000","1":"001000110000100001000010000100011100000000000","2":"011101000100001000100010001000111110000000000","3":"111110001000100000100000110001011100000000000","4":"000100011001010100101111100010000100000000000","5":"111111000011110000010000110001011100000000000","6":"001100100010000111101000110001011100000000000","7":"111110000100010001000100001000010000000000000","8":"011101000110001011101000110001011100000000000","9":"011101000110001011110000100010011000000000000","A":"011101000110001111111000110001100010000000000","B":"111101000110001111101000110001111100000000000","C":"011101000110000100001000010001011100000000000","D":"111001001010001100011000110010111000000000000","E":"111111000010000111101000010000111110000000000","F":"111111000010000111101000010000100000000000000","G":"011101000110000101111000110001011110000000000","H":"100011000110001111111000110001100010000000000","I":"011100010000100001000010000100011100000000000","J":"001110001000010000100001010010011000000000000","K":"100011001010100110001010010010100010000000000","L":"100001000010000100001000010000111110000000000","M":"100011101110101101011000110001100010000000000","N":"100011000111001101011001110001100010000000000","O":"011101000110001100011000110001011100000000000","P":"111101000110001111101000010000100000000000000","Q":"011101000110001100011010110010011010000000000","R":"111101000110001111101010010010100010000000000","S":"011111000010000011100000100001111100000000000","T":"111110010000100001000010000100001000000000000","U":"100011000110001100011000110001011100000000000","V":"100011000110001100011000101010001000000000000","W":"100011000110001101011010110101010100000000000","X":"100011000101010001000101010001100010000000000","Y":"100011000110001010100010000100001000000000000","Z":"111110000100010001000100010000111110000000000"," ":"000000000000000000000000000000000000000000000",":":"000000110001100000000110001100000000000000000",".":"000000000000000000000000001100011000000000000","/":"000000000100010001000100010000000000000000000","-":"000000000000000111110000000000000000000000000","+":"000000010000100111110010000100000000000000000","[":"011100100001000010000100001000011100000000000","]":"011100001000010000100001000010011100000000000","?":"011101000100001000100010000000001000000000000","<":"000100010001000100000100000100000100000000000",">":"010000010000010000010001000100010000000000000","x":"000000000010001010100010001010100010000000000","!":"001000010000100001000010000000001000000000000","_":"000000000000000000000000000000111110000000000","*":"000100010001000111110001000100010000000000000","a":"000000000001110000010111110001011110000000000","b":"100001000010110110011000110001111100000000000","c":"000000000001110100001000010001011100000000000","d":"000010000101101100111000110001011110000000000","e":"000000000001110100011111110000011100000000000","f":"001100100101000111000100001000010000000000000","g":"000000000001111100011000110001011110000101110","h":"100001000010110110011000110001100010000000000","i":"001000000001100001000010000100011100000000000","j":"000100000000110000100001000010000101001001100","k":"100001000010010101001100010100100100000000000","l":"011000010000100001000010000100011100000000000","m":"000000000011010101011010110001100010000000000","n":"000000000010110110011000110001100010000000000","o":"000000000001110100011000110001011100000000000","p":"000000000011110100011000110001111101000010000","q":"000000000001111100011000110001011110000100001","r":"000000000010110110011000010000100000000000000","s":"000000000001110100000111000001111100000000000","t":"010000100011100010000100001001001100000000000","u":"000000000010001100011000110011011010000000000","v":"000000000010001100011000101010001000000000000","w":"000000000010001100011010110101010100000000000","y":"000000000010001100011000110001011110000101110","z":"000000000011111000100010001000111110000000000","à":"010000010001110000010111110001011110000000000","á":"000100010001110000010111110001011110000000000","è":"010000010001110100011111110000011100000000000","é":"000100010001110100011111110000011100000000000","ì":"010000010001100001000010000100011100000000000","í":"000100010001100001000010000100011100000000000","ò":"010000010001110100011000110001011100000000000","ó":"000100010001110100011000110001011100000000000","ù":"010000010010001100011000110011011010000000000","ú":"000100010010001100011000110011011010000000000","È":"010000010011111100001111010000111110000000000","É":"000100010011111100001111010000111110000000000","À":"010000010001110100011111110001100010000000000",",":"000000000000000000000000001100011000010001000",";":"000000000001100011000000001100011000010001000","'":"011000010001000000000000000000000000000000000","\"":"010100101001010000000000000000000000000000000","’":"011000010001000000000000000000000000000000000","(":"000100010001000010000100000100000100000000000",")":"010000010000010000100001000100010000000000000","=":"000000000011111000001111100000000000000000000","#":"010100101011111010101111101010010100000000000","%":"110001100100010001000100010011000110000000000","&":"011001001010100010001010110010011010000000000","@":"011101000100001011011010110101011100000000000","→":"000000010000010111110001000100000000000000000","↵":"000010000100101010011111101000001000000000000","…":"000000000000000000000000000000101010000000000","°":"011001001010010011000000000000000000000000000","|":"001000010000100001000010000100001000000000000","×":"000001000101010001000101010001000000000000000","·":"000000000000000011000110000000000000000000000","€":"001110100011110010001111001000001110000000000","$":"001000111110100011100010111110001000000000000","^":"001000101010001000000000000000000000000000000","~":"000000000001000101010001000000000000000000000","{":"000100010000100010000010000100000100000000000","}":"010000010000100000100010000100010000000000000","\\":"000001000001000001000001000001000000000000000","`":"010000010000010000000000000000000000000000000"};
+const BM = { cv: null, x: null, ps: 2, mq: 0, mqT: 0, mqKey: "", edX: 0, blink: 0 };
+const pxGlyph = (ch) => PXF[ch] || PXF[ch.toUpperCase()] || (ch === "\n" ? PXF["↵"] : PXF["?"]);
+function pxWidth(ch) {                            // larghezza proporzionale; le cifre restano larghe uguali (tempi stabili)
+  if (ch === " ") return 3;
+  if (/[0-9]/.test(ch)) return 5;
+  const g = pxGlyph(ch); let a = 5, b = -1;
+  for (let c = 0; c < 5; c++) for (let r = 0; r < 9; r++) if (g[r * 5 + c] === "1") { a = Math.min(a, c); b = Math.max(b, c); }
+  return b < 0 ? 3 : b - a + 1;
+}
+function pxLeft(ch) { if (/[0-9 ]/.test(ch)) return 0; const g = pxGlyph(ch); for (let c = 0; c < 5; c++) for (let r = 0; r < 9; r++) if (g[r * 5 + c] === "1") return c; return 0; }
+const pxText = (s) => { let w = 0; for (const ch of s) w += pxWidth(ch) + 1; return Math.max(0, w - 1); };
+function pxDraw(s, X, top, col) {                  // X, top in pixel del display; torna la X finale
+  const c = BM.x, u = BM.u; c.fillStyle = col;
+  for (const ch of s) {
+    if (ch !== " ") { const g = pxGlyph(ch), l = pxLeft(ch); for (let r = 0; r < 9; r++) for (let k = 0; k < 5; k++) if (g[r * 5 + k] === "1" && k >= l) c.fillRect((X + k - l) * u, (top + r) * u, u, u); }
+    X += pxWidth(ch) + 1;
+  }
+  return X;
+}
+function bmInit() { const cv = document.createElement("canvas"); cv.id = "d1b"; $("d1").appendChild(cv); BM.cv = cv; BM.x = cv.getContext("2d"); document.body.classList.add("bmp"); }
+function drawD1() {
+  const cv = BM.cv; if (!cv) return;
+  const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+  if (cv.width !== Math.round(W * DPR) || cv.height !== Math.round(H * DPR)) { cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
+  const css = getComputedStyle(document.documentElement), inkC = css.getPropertyValue("--ink").trim(), bg = css.getPropertyValue("--surface").trim();
+  const u = (BM.u = Math.max(1, Math.round(BM.ps * DPR))), c = BM.x;
+  const cols = Math.floor(cv.width / u), rows = Math.floor(cv.height / u), top = Math.floor((rows - 7) / 2), pad = Math.round(10 * DPR / u);
+  c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height);
+  clearTimeout(BM.mqT);
+  if (land) {                                     // orizzontale: riga di scrittura con cursore e selezione
+    const t = [...draft.text], car = draft.caret, xs = [0]; for (const ch of t) xs.push(xs[xs.length - 1] + pxWidth(ch) + 1);
+    const vw = cols - pad * 2, cx = xs[car];
+    if (cx - BM.edX > vw - 12) BM.edX = cx - vw + 24; else if (cx - BM.edX < 6) BM.edX = Math.max(0, cx - 24);
+    c.save(); c.beginPath(); c.rect(pad * u - u, 0, (vw + 2) * u, cv.height); c.clip();
+    const X0 = pad - BM.edX; pxDraw(t.join(""), X0, top, inkC);
+    if (hasSel()) { const [a, b] = selRange(); c.fillStyle = inkC; c.fillRect((X0 + xs[a] - 1) * u, (top - 2) * u, (xs[b] - xs[a] + 1) * u, 12 * u); pxDraw(t.slice(a, b).join(""), X0 + xs[a], top, bg); }
+    if (Math.floor(performance.now() / 530) % 2 === 0) { c.fillStyle = inkC; c.fillRect((X0 + cx - 1) * u, (top - 2) * u, Math.max(1, Math.round(DPR)), 12 * u); }
+    c.restore(); BM.mqT = setTimeout(drawD1, 530); return;
+  }
+  const lab = LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, "  "), tm = $("d1t").textContent;
+  let X = pad; if (lab) X = pxDraw(lab, X, top, inkC) + 7;
+  const end = cols - pad;
+  if (rec && !msg) {                              // REC: VU a barre da 1px, poi il tempo
+    const tw = pxText(tm), tx = end - tw; X = pxDraw(val, X, top, inkC) + (val ? 7 : 0);
+    const x0 = X * u, x1 = (tx - 7) * u, px = Math.max(1, Math.round(DPR)), n = Math.floor((x1 - x0) / (2 * px)), on = Math.round((rec.lv || 0) * n), y0 = top * u, hh = 7 * u;
+    c.fillStyle = inkC; for (let i = 0; i < n; i++) { const bh = i < on ? hh : px; c.fillRect(x0 + i * 2 * px, y0 + Math.round((hh - bh) / 2), px, bh); }
+    pxDraw(tm, tx, top, inkC); return;
+  }
+  const w = pxText(val), avail = end - X;
+  if (w <= avail) { pxDraw(val, X, top, inkC); BM.mqKey = ""; return; }
+  // testo lungo: scorre (marquee) con una pausa all'inizio
+  const key = mode + "|" + val; if (key !== BM.mqKey) { BM.mqKey = key; BM.mq = performance.now(); }
+  const gap = 24, loop = w + gap, el = Math.max(0, performance.now() - BM.mq - 1500), off = Math.floor((el / 1000) * 20) % loop;
+  c.save(); c.beginPath(); c.rect(X * u, 0, avail * u, cv.height); c.clip();
+  pxDraw(val, X - off, top, inkC); pxDraw(val, X - off + loop, top, inkC); c.restore();
+  BM.mqT = setTimeout(drawD1, 50);
+}
+
 /* ============ Layout ============ */
 let land = false;
 function layout() {
@@ -1355,6 +1528,7 @@ async function demo() {                        // voci di esempio solo al primis
   ];
   for (const it of list) { await dbPut(it); items.push(it); }
 }
+bmInit();
 (async () => {
   try { db = await idb(); items = await dbAll(); if (!items.length && store.get("jrn1-demo", "") !== "1") { store.set("jrn1-demo", "1"); await demo(); } }
   catch (e) { flash("Memoria non disponibile"); }

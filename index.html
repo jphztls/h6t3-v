@@ -482,18 +482,38 @@ function renderDirs() {
   const el = $("dirs").children[dirSel]; if (el) el.scrollIntoView({ block: "nearest" });
 }
 $("dirs").addEventListener("click", (e) => { const r = e.target.closest(".dr"); if (!r) return; audio(); const i = +r.dataset.i; if (i === dirSel) M.cartelle.shift(); else { dirSel = i; renderDirs(); d1(); sound("browse"); } });
+let dirAct = 0, dirConfirm = false;
+function dirActs(f) { return f === "+" ? [["nuova"]] : [["apri"], ["rinomina"]].concat(S.folders.filter((o) => o !== f).map((o) => ["unisci", o])).concat([["elimina"]]); }
+const actLabel = (a) => (a[0] === "unisci" ? "unisci in " + a[1] : a[0]);
+async function mergeFolder(from, to) {             // unisce (o elimina se to è vuoto) una cartella
+  for (const it of items) if (it.folder === from) { it.folder = to || undefined; await dbPut(it); }
+  S.folders.splice(S.folders.indexOf(from), 1); saveS();
+}
 M.cartelle = {
-  enter() { dirOpen = null; S.filter = null; showPane("dirs"); renderDirs(); },
+  enter() { dirOpen = null; S.filter = null; dirAct = 0; dirConfirm = false; showPane("dirs"); renderDirs(); },
   leave() { dirOpen = null; S.filter = null; renderFeedKeep(); },
-  dial(d) { if (dirOpen) return setSel(sel + d); const n = dirRows().length, j = dirSel + d; if (j < 0 || j >= n) return false; dirSel = j; renderDirs(); return true; },
-  sdial(d) { return dirOpen ? assignFolder(d) : this.dial(d); },
-  shift() {
-    if (dirOpen) { this.center(); return; }
-    const f = dirRows()[dirSel]; if (f === "+") { flash("Ruota il telefono"); sound("set"); return; }
-    dirOpen = f; S.filter = f; sel = 0; showPane("feed"); renderFeed(); sound("set");
+  dial(d) { if (dirOpen) return setSel(sel + d); const n = dirRows().length, j = dirSel + d; if (j < 0 || j >= n) return false; dirSel = j; dirAct = 0; dirConfirm = false; renderDirs(); return true; },
+  sdial(d) {                                   // Shift + ghiera: sceglie l'azione sulla cartella
+    if (dirOpen) return assignFolder(d);
+    const A = dirActs(dirRows()[dirSel]), j = dirAct + d; if (j < 0 || j >= A.length) return false; dirAct = j; dirConfirm = false; d1(); return true;
   },
-  center() { if (dirOpen) { dirOpen = null; S.filter = null; showPane("dirs"); renderDirs(); renderFeed(); sound("menu"); d1(); } else this.shift(); },
-  d1() { if (dirOpen) { const it = cur(); return dirOpen + (it ? "  " + it.name : ""); } const f = dirRows()[dirSel]; return f === "+" ? "nuova" : f; },
+  async shift() {
+    if (dirOpen) { this.center(); return; }
+    const f = dirRows()[dirSel], a = dirActs(f)[dirAct] || ["apri"];
+    if (a[0] === "nuova" || a[0] === "rinomina") { flash("Ruota il telefono"); sound("set"); return; }
+    if (a[0] === "apri") { dirOpen = f; S.filter = f; sel = 0; showPane("feed"); renderFeed(); sound("set"); return; }
+    if (!dirConfirm) { dirConfirm = true; d1(); sound("stop"); return; }
+    dirConfirm = false;
+    if (a[0] === "unisci") { await mergeFolder(f, a[1]); dirSel = S.folders.indexOf(a[1]); flash(f + " → " + a[1]); }
+    else { await mergeFolder(f, null); flash("Eliminata " + f); }
+    dirAct = 0; renderDirs(); renderFeed(); sound("act");
+  },
+  center() { if (dirOpen) { dirOpen = null; S.filter = null; showPane("dirs"); renderDirs(); renderFeed(); sound("menu"); d1(); } else if (dirConfirm) { dirConfirm = false; d1(); sound("menu"); } else this.shift(); },
+  d1() {
+    if (dirOpen) { const it = cur(); return dirOpen + (it ? "  " + it.name : ""); }
+    const f = dirRows()[dirSel], a = dirActs(f)[dirAct] || ["apri"];
+    return (f === "+" ? "" : f + "  ") + actLabel(a) + (dirConfirm ? "  conferma?" : "");
+  },
 };
 function renderFeedKeep() { const it = cur(); renderFeed(); if (it) setSel(Math.max(0, vis().indexOf(it)), true); }
 
@@ -985,10 +1005,10 @@ async function saveDraft() {
     const old = editTarget.dir, nw = txt.trim().toLowerCase();
     if (!old) { if (!nw) { sound("stop"); return; } if (!S.folders.includes(nw)) S.folders.push(nw); editTarget.dir = nw; dirSel = S.folders.indexOf(nw); flash("Cartella " + nw); }
     else {
-      const i = S.folders.indexOf(old); if (nw && S.folders.includes(nw) && nw !== old) { sound("stop"); flash("Esiste già"); return; }
-      if (nw) S.folders[i] = nw; else S.folders.splice(i, 1);
+      const i = S.folders.indexOf(old), merge = nw && S.folders.includes(nw) && nw !== old;   // nome già esistente = unisce
+      if (merge || !nw) S.folders.splice(i, 1); else S.folders[i] = nw;
       for (const it of items) if (it.folder === old) { it.folder = nw || undefined; await dbPut(it); }
-      editTarget.dir = nw || null; flash(nw ? "Rinominata " + nw : "Eliminata " + old);
+      editTarget.dir = nw || null; dirSel = Math.max(0, S.folders.indexOf(nw)); flash(nw ? (merge ? old + " → " + nw : "Rinominata " + nw) : "Eliminata " + old);
     }
     saveS(); renderDirs(); renderFeed(); sound("act"); return;
   }

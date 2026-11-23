@@ -1,6 +1,6 @@
 // Rete prima, cache come riserva: ogni apertura con connessione carica l'ultima versione,
 // senza rete l'app funziona con l'ultima copia salvata.
-const CACHE = "jrn1-v9";               // alzare a ogni rilascio
+const CACHE = "jrn1-v10";               // alzare a ogni rilascio
 const FILES = ["./", "index.html", "scan.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE)
   .then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" }))))   // salta la cache HTTP di GitHub Pages (10 min)

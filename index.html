@@ -78,7 +78,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 /* Barra: frecce (un tasto unico) + Display 1 su una riga */
 #bar { flex: none; display: flex; height: 44px; margin: var(--space-2) var(--space-3) 0; }
 #arrows { flex: none; display: flex; height: 100%; }
-#arrows button { height: 100%; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; }
+#arrows button { height: 100%; width: var(--bh, 44px); flex: none; display: flex; align-items: center; justify-content: center; }
 #arrows button + button { border-left: var(--border-hairline) solid var(--line); }
 #arrows button.down { background: var(--surface-inverse); color: var(--ink-inverse); }
 #arrows svg { width: 12px; height: 12px; fill: currentColor; }
@@ -1015,10 +1015,10 @@ let land = false;
 function layout() {
   const app = $("app"), sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
   const w = window.innerWidth, h = window.innerHeight, L = w > h && h < 520;
-  if (navigator.standalone) {                  // iOS dalla Home: la pagina risulta più corta dello schermo; si usa l'altezza reale
-    const H = (L ? sw : sh) + "px";
-    for (const el of [document.documentElement, document.body, app]) { el.style.bottom = "auto"; el.style.height = H; }
-  }
+  // iOS dalla Home: se la finestra è più corta dello schermo, la zona dell'indicatore Home è già fuori dalla pagina:
+  // non si aggiunge altro margine sotto (altrimenti resta un vuoto)
+  const gap = (L ? sw : sh) - window.innerHeight;
+  app.style.paddingBottom = navigator.standalone && !L && gap > 30 ? "0px" : "";
   if (L !== land) {
     land = L; document.body.classList.toggle("land", land);
     if (land) {
@@ -1028,6 +1028,7 @@ function layout() {
       draft.caret = draft.text.length; draft.anchor = null; kbPage = "abc"; caps = autoCaps() ? 1 : 0; renderKb(); renderEd();
     } else if (editTarget) { editTarget = null; draft.text = store.get("jrn1-draft", ""); draft.caret = draft.text.length; }
   }
+  const bar = $("bar"); requestAnimationFrame(() => bar.style.setProperty("--bh", bar.clientHeight + "px"));
   const led = $("led");
   if (!land) {
     const W = app.clientWidth;

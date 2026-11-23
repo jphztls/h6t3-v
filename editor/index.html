@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EDT-1</title>
+<title>JRN-1-editor</title>
 <meta name="description" content="Editor dell'interfaccia di JRN-1: modifica misure e stile, poi esporta un file da passare a Claude.">
 <style>
 :root {
@@ -84,7 +84,7 @@ iframe { display: block; border: 0; background: #fff; }
 <body>
 <div class="app">
   <header>
-    <span class="t">EDT-1</span>
+    <span class="t">JRN-1-editor</span>
     <span class="src" id="src">Carico JRN-1…</span>
     <button id="undo" title="Annulla (Ctrl+Z)">Annulla</button>
     <button id="redo" title="Ripeti (Ctrl+Shift+Z)">Ripeti</button>
@@ -543,7 +543,7 @@ function exportObj() {
   for (const id in tmap) if (changed(id)) tokens[tmap[id]] = typeof val(id) === "number" ? val(id) + "px" : val(id);
   if (["tok.size", "tok.lh", "tok.weight", "tok.font"].some(changed)) tokens["--text"] = `${val("tok.weight")} ${val("tok.size")}px/${val("tok.lh")}px var(--font-sans)`;
   return {
-    formato: "EDT-1 modifiche UI", versione: 1, app: "JRN-1", base: JRN && JRN.base ? JRN.base : "", data: new Date().toISOString(),
+    formato: "JRN-1-editor modifiche UI", versione: 1, app: "JRN-1", base: JRN && JRN.base ? JRN.base : "", data: new Date().toISOString(),
     istruzioni: "Applica a JRN-1 (repo h6t3-v) le modifiche qui sotto. 'css' contiene le regole pronte: valgono dopo il CSS attuale, stessi selettori. I parametri con dove='script: …' vanno cambiati nel codice indicato. Leggi le note.",
     schermo_simulato: { larghezza: val("sim.w"), altezza: val("sim.h"), zona_sicura_alto: val("sim.top"), zona_sicura_basso: val("sim.bot") },
     modifiche: changeList(), token: tokens, proprieta_libere: free,
@@ -561,7 +561,7 @@ $("exp").onclick = () => {
 };
 $("copy").onclick = async () => {
   const o = exportObj(); delete o.stato_editor;
-  const txt = "Modifiche all'interfaccia di JRN-1 fatte con EDT-1. Applicale:\n\n```json\n" + JSON.stringify(o, null, 2) + "\n```";
+  const txt = "Modifiche all'interfaccia di JRN-1 fatte con JRN-1-editor. Applicale:\n\n```json\n" + JSON.stringify(o, null, 2) + "\n```";
   try { await navigator.clipboard.writeText(txt); toast("Copiato: incollalo nel thread di JRN-1"); }
   catch (e) { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); toast("Copiato"); }
 };

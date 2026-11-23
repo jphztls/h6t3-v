@@ -1,4 +1,4 @@
-/* EDT-1: contenuti finti e parti disegnate (ghiera, striscia, tastiera) dentro l'anteprima di JRN-1.
+/* JRN-1-editor: contenuti finti e parti disegnate (ghiera, striscia, tastiera) dentro l'anteprima di JRN-1.
    Gira dentro l'iframe; l'editor chiama MOCK.apply(cfg, screen). Le formule copiano layout() e drawDial() di JRN-1. */
 (function () {
   const $ = (id) => document.getElementById(id);

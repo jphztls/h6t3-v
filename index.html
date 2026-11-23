@@ -54,6 +54,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #detail { padding: var(--space-3); }
 #detail .tx { white-space: pre-wrap; word-wrap: break-word; }
 #detail img { display: block; width: 100%; height: auto; }
+:root[data-theme="dark"] img.inv { filter: invert(1); }   /* scansioni in grigio/BN: bianco su nero col tema scuro */
 #detail canvas.wf { display: block; width: 100%; height: 80px; }
 #detail .part + .part { margin-top: var(--space-3); }
 #detail iframe { width: 100%; height: 70vh; border: 0; background: #fff; }
@@ -82,7 +83,8 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #arrows button + button { border-left: var(--border-hairline) solid var(--line); }
 #arrows button.down { background: var(--surface-inverse); color: var(--ink-inverse); }
 #arrows svg { width: 12px; height: 12px; fill: currentColor; }
-#d1 { position: relative; flex: 1; min-width: 0; overflow: hidden; margin-left: -1px; }
+#d1 { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+#arrows { order: 2; margin-left: -1px; }
 #d1 .l1 { position: absolute; inset: 0; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); white-space: nowrap; overflow: hidden; }
 #d1 .l1 span { overflow: hidden; text-overflow: ellipsis; }
 #d1 .l1 #d1v { flex: 1; min-width: 0; }
@@ -109,8 +111,6 @@ body.land #app { max-width: none; display: grid; grid-template-rows: .7fr 1fr 1f
   padding: var(--space-2) max(var(--space-2), env(safe-area-inset-right)) max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left)); }
 body.land .top, body.land #d2, body.land #dial { display: none; }
 body.land #bar { grid-row: 1; height: auto; margin: 0; min-height: 0; min-width: 0; }
-body.land #arrows { order: 2; margin-left: -1px; }
-body.land #d1 { margin-left: 0; }
 body.land #ed { display: flex; }
 body.land #d1 .l1, body.land #d1c { display: none; }
 body.land #kb { grid-row: 2 / 6; display: flex; flex-direction: column; gap: 1px; min-height: 0; background: var(--line); border: var(--border-hairline) solid var(--line); }
@@ -274,9 +274,9 @@ function mech(down, big) {
 ["touchend", "click"].forEach((t) => document.addEventListener(t, () => { if (S.sound === "1") audio(); }, true));
 
 /* ============ Modalità ============ */
-const VIEW = ["consulta", "calendario", "cartelle", "edit", "archivio"];
+const VIEW = ["consulta", "calendario", "cartelle", "edit", "elimina", "archivio"];
 const CAP = ["registra", "foto", "scansione", "file", "testo"];
-const LABEL = { consulta: "CONSULTA", calendario: "CALENDARIO", cartelle: "CARTELLE", edit: "EDIT", archivio: "ARCHIVIO", registra: "REGISTRA", foto: "FOTO", scansione: "SCANSIONE", file: "FILE", testo: "TESTO" };
+const LABEL = { consulta: "CONSULTA", calendario: "CALENDARIO", cartelle: "CARTELLE", edit: "EDIT", elimina: "ELIMINA", archivio: "ARCHIVIO", registra: "REGISTRA", foto: "FOTO", scansione: "SCANSIONE", file: "FILE", testo: "TESTO" };
 const M = {};                                         // gestori: enter, leave, dial, sdial, center, shift, d1
 let mode = VIEW.includes(S.mode) || CAP.includes(S.mode) ? S.mode : "consulta";
 function setMode(k) {
@@ -321,6 +321,18 @@ const vis = () => (S.filter && mode === "cartelle" ? items.filter((i) => i.folde
 const cur = () => vis()[sel];
 const urls = new Map();
 function urlOf(it, k) { const key = it.name + "#" + (k || 0); if (!urls.has(key)) urls.set(key, URL.createObjectURL(parts(it)[k || 0].blob)); return urls.get(key); }
+/* Filtro delle scansioni: il file resta solo raddrizzato, il filtro si calcola quando si guarda */
+const fcache = new Map();
+function filteredUrl(it, k) {
+  const p = parts(it)[k], key = it.name + "#" + k + "#" + p.filter + "#" + p.blob.size;
+  if (!fcache.has(key)) fcache.set(key, (async () => {
+    const bm = await createImageBitmap(p.blob), s = Math.min(1, 1600 / Math.max(bm.width, bm.height));
+    const c = canvasOf(Math.round(bm.width * s), Math.round(bm.height * s)), x = c.getContext("2d"); x.drawImage(bm, 0, 0, c.width, c.height);
+    const img = enhance(x.getImageData(0, 0, c.width, c.height), p.filter); x.putImageData(img, 0, 0);
+    const b = await toBlob(c, 0.85); freeCanvas(c); return URL.createObjectURL(b);
+  })());
+  return fcache.get(key);
+}
 function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
 function drawWave(cv, peaks, prog) {
   const w = cv.clientWidth || 300, h = cv.clientHeight || 34; cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
@@ -335,7 +347,11 @@ function drawWave(cv, peaks, prog) {
 function partEl(it, k, full) {
   const p = parts(it)[k], d = document.createElement("div"); d.className = "part";
   if (p.type === "text") { const t = document.createElement("div"); t.className = "tx"; t.textContent = p.text; d.appendChild(t); }
-  else if (p.type === "image") { const im = new Image(); im.src = urlOf(it, k); im.alt = ""; d.appendChild(im); }
+  else if (p.type === "image") {
+    const im = new Image(); im.alt = ""; d.appendChild(im);
+    if (p.filter && p.filter !== "originale") { im.className = p.filter === "migliorato" ? "" : "inv"; filteredUrl(it, k).then((u) => (im.src = u)).catch(() => (im.src = urlOf(it, k))); }
+    else im.src = urlOf(it, k);
+  }
   else if (p.type === "audio") {
     const cv = document.createElement("canvas"); cv.className = "wf"; d.appendChild(cv);
     const t = document.createElement("div"); t.className = "fl"; t.textContent = p.dur ? clock(p.dur) : (p.orig || "audio"); d.appendChild(t);
@@ -457,7 +473,7 @@ M.cartelle = {
 function renderFeedKeep() { const it = cur(); renderFeed(); if (it) setSel(Math.max(0, vis().indexOf(it)), true); }
 
 /* ---- EDIT ---- */
-const EDIT_ACT = [["testo", "modifica testo"], ["audio", "aggiungi audio"], ["foto", "aggiungi foto"], ["file", "aggiungi file"], ["elimina", "elimina"]];
+const EDIT_ACT = [["testo", "modifica testo"], ["audio", "aggiungi audio"], ["foto", "aggiungi foto"], ["file", "aggiungi file"], ["filtro", "filtro scansione"]];
 let editAct = 0, confirmDel = false, editTarget = null;
 M.edit = {
   enter() { confirmDel = false; },
@@ -470,12 +486,31 @@ M.edit = {
     else if (a === "audio") { rec ? recStop() : recStart(it); }
     else if (a === "foto") { pickTarget = it; pick("image/*", true); }
     else if (a === "file") { pickTarget = it; pick("", false); }
-    else if (a === "elimina") {
-      if (!confirmDel) { confirmDel = true; d1(); sound("stop"); return; }
-      confirmDel = false; await dbDel(it.name); items.splice(items.indexOf(it), 1); renderFeed(); flash("Eliminato " + it.name); sound("act");
+    else if (a === "filtro") {
+      const sc = parts(it).filter((p) => p.filter); if (!sc.length) { sound("stop"); return; }
+      const nf = FILTERS[(FILTERS.indexOf(sc[0].filter) + 1) % FILTERS.length]; sc.forEach((p) => (p.filter = nf));
+      await dbPut(it); renderFeed(); flash(it.name + "  " + nf); sound("set");
     }
   },
   d1() { const it = cur(); return (it ? it.name + "  " : "") + (confirmDel ? "conferma?" : EDIT_ACT[editAct][1]); },
+};
+
+/* ---- ELIMINA: ghiera sceglie la voce, Shift + ghiera la parte (tutto o un allegato), Shift due volte elimina ---- */
+let delPart = 0, delConfirm = false;
+M.elimina = {
+  enter() { delPart = 0; delConfirm = false; },
+  dial(d) { delPart = 0; delConfirm = false; return setSel(sel + d); },
+  sdial(d) { const it = cur(); if (!it) return false; const n = parts(it).length, j = delPart + d; if (j < 0 || j >= n) return false; delPart = j; delConfirm = false; d1(); return true; },
+  center() { if (delConfirm) { delConfirm = false; d1(); sound("menu"); } },
+  async shift() {
+    const it = cur(); if (!it) { sound("stop"); return; }
+    if (!delConfirm) { delConfirm = true; d1(); sound("stop"); return; }
+    delConfirm = false;
+    if (delPart === 0) { await dbDel(it.name); items.splice(items.indexOf(it), 1); flash("Eliminato " + it.name); }
+    else { it.att.splice(delPart - 1, 1); for (const k of [...urls.keys()]) if (k.startsWith(it.name + "#")) { URL.revokeObjectURL(urls.get(k)); urls.delete(k); } await dbPut(it); flash("Eliminato " + it.name + "_" + String.fromCharCode(96 + delPart)); delPart = 0; }
+    renderFeed(); sound("act");
+  },
+  d1() { const it = cur(); if (!it) return ""; return it.name + "  " + (delPart ? "_" + String.fromCharCode(96 + delPart) : "tutto") + (delConfirm ? "  conferma?" : ""); },
 };
 
 /* ---- ARCHIVIO (impostazioni nel Display 1) ---- */
@@ -688,6 +723,18 @@ function drawScanOv() {
   const m = SC.frozen ? stillMap() : coverMap(), P = q.map((p) => [(p[0] * m.s + m.ox) * DPR, (p[1] * m.s + m.oy) * DPR]);
   c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath(); c.stroke();
   if (SC.frozen) for (const p of P) { c.beginPath(); c.arc(p[0], p[1], 12 * DPR, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(p[0], p[1], 2.5 * DPR, 0, Math.PI * 2); c.fill(); }
+  if (SC.frozen && SC.drag >= 0) {              // lente: ingrandisce l'angolo che si sta spostando, sopra il dito
+    const q0 = q[SC.drag], R = 56 * DPR, Z = 4, p = P[SC.drag];
+    let lx = p[0], ly = p[1] - 110 * DPR; if (ly < R + 4 * DPR) ly = p[1] + 110 * DPR;
+    lx = Math.max(R + 4 * DPR, Math.min(ov.width - R - 4 * DPR, lx));
+    const src = R / (m.s * DPR * Z);              // raggio della lente in pixel del fotogramma
+    c.save(); c.beginPath(); c.arc(lx, ly, R, 0, Math.PI * 2); c.clip();
+    c.fillStyle = "#000"; c.fillRect(lx - R, ly - R, 2 * R, 2 * R);
+    c.drawImage(SC.src, q0[0] - src, q0[1] - src, src * 2, src * 2, lx - R, ly - R, 2 * R, 2 * R);
+    c.restore();
+    c.beginPath(); c.arc(lx, ly, R, 0, Math.PI * 2); c.stroke();
+    c.fillRect(lx - R, ly - DPR / 2, R * 2, DPR); c.fillRect(lx - DPR / 2, ly - R, DPR, R * 2);
+  }
 }
 function drawStill() {
   const W = cam.clientWidth, H = cam.clientHeight; still.width = Math.round(W * DPR); still.height = Math.round(H * DPR);
@@ -698,14 +745,14 @@ ov.addEventListener("pointerdown", (e) => {
   if (mode !== "scansione" || !SC.frozen) return; e.preventDefault(); ov.setPointerCapture(e.pointerId);
   const b = ov.getBoundingClientRect(), m = stillMap(), x = e.clientX - b.left, y = e.clientY - b.top; let best = -1, bd = 44;
   SC.quad.c.forEach((p, i) => { const d = Math.hypot(p[0] * m.s + m.ox - x, p[1] * m.s + m.oy - y); if (d < bd) { bd = d; best = i; } });
-  SC.drag = best; if (best >= 0) { audio(); sound("set"); }
+  SC.drag = best; if (best >= 0) { audio(); sound("set"); drawScanOv(); }
 });
 ov.addEventListener("pointermove", (e) => {
   if (SC.drag < 0) return; const b = ov.getBoundingClientRect(), m = stillMap();
   const x = Math.max(0, Math.min(SC.src.width, (e.clientX - b.left - m.ox) / m.s)), y = Math.max(0, Math.min(SC.src.height, (e.clientY - b.top - m.oy) / m.s));
   SC.quad.c[SC.drag] = [x, y]; SC.quad.m = [[0, 0], [0, 0], [0, 0], [0, 0]]; drawScanOv();
 });
-["pointerup", "pointercancel"].forEach((t) => ov.addEventListener(t, () => { if (SC.drag >= 0) sound("detent"); SC.drag = -1; }));
+["pointerup", "pointercancel"].forEach((t) => ov.addEventListener(t, () => { if (SC.drag >= 0) sound("detent"); SC.drag = -1; drawScanOv(); }));
 M.scansione = {
   enter() { showPane("cam"); vid.style.transform = ""; vid.style.filter = ""; camStart().then(() => scanLoop()); },
   leave() { clearTimeout(SC.timer); SC.frozen = false; SC.doc = null; SC.pages = 0; freeCanvas(SC.src); SC.src = null; camStop(); sizeOv().clearRect(0, 0, ov.width, ov.height); },
@@ -724,15 +771,15 @@ M.scansione = {
         SC.frozen = true; cam.classList.add("frozen"); drawStill(); drawScanOv(); sound("set"); d1(); return;
       }
       flash("Raddrizzo…"); await new Promise((r) => setTimeout(r, 30));   // 2. raddrizza, filtra e salva la pagina
-      let img = warp(SC.src, SC.quad, 2400); img = enhance(img, S.scanFilter === "bn" ? "bn" : S.scanFilter === "grigi" ? "grigi" : S.scanFilter === "originale" ? "originale" : "migliorato");
-      const c = canvasOf(img.width, img.height); c.getContext("2d").putImageData(img, 0, 0); const b = await toBlob(c, 0.88); freeCanvas(c);
+      const img = warp(SC.src, SC.quad, 2400);            // si salva solo ritagliata e raddrizzata: il filtro resta un'informazione
+      const c = canvasOf(img.width, img.height); c.getContext("2d").putImageData(img, 0, 0); const b = await toBlob(c, 0.92); freeCanvas(c);
       SC.frozen = false; cam.classList.remove("frozen"); freeCanvas(SC.src); SC.src = null;
-      const part = { type: "image", ext: "jpg", mime: "image/jpeg", blob: b };
+      const part = { type: "image", ext: "jpg", mime: "image/jpeg", blob: b, filter: S.scanFilter };
       if (SC.doc && items.includes(SC.doc)) await attach(SC.doc, part); else SC.doc = await addItem(Object.assign({}, part));
       SC.pages = parts(SC.doc).length; d1();
     } catch (e) { flash("Errore: " + (e.message || e)); sound("stop"); }
   },
-  d1() { return (SC.doc ? SC.doc.name : nextName()) + "  p." + (SC.frozen ? SC.pages + 1 : SC.pages || 1) + "  " + S.scanFilter; },
+  d1() { return (SC.doc ? SC.doc.name : nextName()) + "  p." + (SC.pages + 1) + "  " + S.scanFilter; },
 };
 
 /* ---- FILE: nome proposto con la data del file, la ghiera la cambia ---- */
@@ -968,7 +1015,7 @@ async function exportZip(list, fname) {
     for (let k = 0; k < P.length; k++) {
       const p = P[k], fn = partName(it, k);
       files.push({ name: fn, data: p.type === "text" ? enc.encode(p.text) : new Uint8Array(await p.blob.arrayBuffer()), date: it.created });
-      index.push({ file: fn, item: it.name, type: p.type, created: it.created, orig: p.orig || undefined, dur: p.dur, peaks: p.peaks });
+      index.push({ file: fn, item: it.name, type: p.type, created: it.created, orig: p.orig || undefined, dur: p.dur, peaks: p.peaks, filter: p.filter });
       if (it.folder) folders.push(fn + "\t" + it.folder);
     }
   }
@@ -989,7 +1036,7 @@ $("fzip").addEventListener("change", async (ev) => {
     if (ix) try { for (const m of JSON.parse(dec.decode(ix.data)).items || []) meta[m.file] = m; } catch (e) {}
     if (cf) for (const line of dec.decode(cf.data).split(/\r?\n/)) { const [a, b] = line.split("\t"); if (a && b) fold[a] = b.trim(); }
     let added = 0, skipped = 0; const pending = [];
-    const mkPart = (x, base, ext) => { const m = meta[base] || {}, mime = MIME[ext] || "application/octet-stream", p = { ext: ext || "bin", mime, type: m.type || typeOf(ext, mime), orig: m.orig }; if (p.type === "text") p.text = dec.decode(x.data); else p.blob = new Blob([x.data], { type: mime }); if (m.peaks) { p.peaks = m.peaks; p.dur = m.dur; } return p; };
+    const mkPart = (x, base, ext) => { const m = meta[base] || {}, mime = MIME[ext] || "application/octet-stream", p = { ext: ext || "bin", mime, type: m.type || typeOf(ext, mime), orig: m.orig }; if (p.type === "text") p.text = dec.decode(x.data); else p.blob = new Blob([x.data], { type: mime }); if (m.peaks) { p.peaks = m.peaks; p.dur = m.dur; } if (m.filter) p.filter = m.filter; return p; };
     for (const x of ents) {
       const base = x.name.split("/").pop(); if (base === "index.json" || base === "cartelle.txt") continue;
       const ext = extOf(base), stem = base.slice(0, base.length - ext.length - (ext ? 1 : 0));

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EDT-1</title>
+<meta name="description" content="Editor dell'interfaccia di JRN-1: modifica misure e stile, poi esporta un file da passare a Claude.">
+<style>
+:root {
+  --surface: #ffffff; --ink: #000000; --hl: #ff3b30;
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: Menlo, "SF Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --surface: #000000; --ink: #ffffff; color-scheme: dark; } }
+:root[data-theme="dark"] { --surface: #000000; --ink: #ffffff; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--surface); color: var(--ink); font: 400 14px/20px var(--font); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: var(--surface); border: 1px solid var(--ink); height: 28px; padding: 0 10px; cursor: pointer; border-radius: 0; }
+button:hover { background: var(--ink); color: var(--surface); }
+button.on { background: var(--ink); color: var(--surface); }
+button:disabled { opacity: .35; cursor: default; background: var(--surface); color: var(--ink); }
+input[type=number], input[type=text], select, textarea { background: var(--surface); border: 1px solid var(--ink); border-radius: 0; height: 26px; padding: 0 6px; min-width: 0; }
+textarea { height: auto; padding: 6px; resize: vertical; width: 100%; line-height: 18px; }
+input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid var(--ink); background: none; }
+.app { display: grid; grid-template-columns: 330px 1fr 330px; grid-template-rows: 44px 1fr; height: 100vh; }
+header { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+header .t { font-weight: 700; margin-right: 6px; }
+header .src { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.seg { display: inline-flex; } .seg button + button { margin-left: -1px; }
+aside { overflow-y: auto; min-height: 0; }
+#left { border-right: 1px solid var(--ink); }
+#right { border-left: 1px solid var(--ink); }
+.grp > summary { list-style: none; cursor: pointer; padding: 8px 12px; border-bottom: 1px solid var(--ink); display: flex; justify-content: space-between; user-select: none; }
+.grp > summary::-webkit-details-marker { display: none; }
+.grp > summary::after { content: "+"; }
+.grp[open] > summary::after { content: "−"; }
+.grp .n { font-variant-numeric: tabular-nums; }
+.rows { padding: 6px 12px 10px; border-bottom: 1px solid var(--ink); }
+.row { display: grid; grid-template-columns: 10px 1fr 112px 22px; align-items: center; gap: 6px; min-height: 30px; }
+.row .dot { width: 6px; height: 6px; border-radius: 50%; }
+.row.chg .dot { background: var(--hl); }
+.row label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row label small { opacity: 1; font-size: 11px; }
+.row .in { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+.row .in input[type=number] { width: 70px; text-align: right; }
+.row .in input[type=text] { width: 112px; }
+.row .in select { width: 112px; }
+.row .u { width: 18px; font-size: 12px; }
+.row .rs { width: 22px; height: 22px; padding: 0; border: 0; visibility: hidden; }
+.row.chg .rs { visibility: visible; }
+.row.hot label { text-decoration: underline; text-underline-offset: 3px; }
+.hint { padding: 8px 12px; border-bottom: 1px solid var(--ink); font-size: 12px; line-height: 17px; }
+main { position: relative; overflow: auto; min-height: 0; }
+#tools { position: sticky; top: 0; left: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--ink); }
+#stage { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; justify-content: center; padding: 28px; }
+.dev { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.dev .cap { font-size: 12px; font-variant-numeric: tabular-nums; }
+.dev .fr { border: 1px solid var(--ink); outline: 6px solid var(--ink); border-radius: 2px; overflow: hidden; transform-origin: 0 0; }
+.dev .wrap { position: relative; }
+iframe { display: block; border: 0; background: #fff; }
+#right h3 { margin: 0; padding: 8px 12px; font-size: 14px; border-bottom: 1px solid var(--ink); display: flex; justify-content: space-between; gap: 8px; }
+.sec { padding: 10px 12px; border-bottom: 1px solid var(--ink); }
+.sec .lbl { font-size: 12px; margin-bottom: 4px; display: block; }
+.kv { display: grid; grid-template-columns: 1fr 120px; gap: 4px 8px; align-items: center; }
+.kv input { width: 100%; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.chg-list { font-size: 12px; line-height: 17px; }
+.chg-list div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.chg-list b { font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.empty { font-size: 12px; }
+#toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 6px 12px; display: none; z-index: 9; }
+#fileIn, #jrnIn { display: none; }
+@media (max-width: 1100px) { .app { grid-template-columns: 290px 1fr 290px; } }
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; height: auto; }
+  header { flex-wrap: wrap; height: auto; padding: 8px 16px; white-space: normal; }
+  #left, #right { border: 0; border-top: 1px solid var(--ink); }
+  main { overflow: auto; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="t">EDT-1</span>
+    <span class="src" id="src">Carico JRN-1…</span>
+    <button id="undo" title="Annulla (Ctrl+Z)">Annulla</button>
+    <button id="redo" title="Ripeti (Ctrl+Shift+Z)">Ripeti</button>
+    <button id="reset">Ripristina tutto</button>
+    <button id="imp">Importa</button>
+    <button id="copy">Copia per Claude</button>
+    <button id="exp" class="on">Esporta file</button>
+    <input type="file" id="fileIn" accept=".json,application/json">
+  </header>
+
+  <aside id="left"></aside>
+
+  <main>
+    <div id="tools">
+      <span class="seg" id="vOri"><button data-v="both">Entrambe</button><button data-v="port">Verticale</button><button data-v="land">Orizzontale</button></span>
+      <span class="seg" id="vTheme"><button data-v="light">Chiaro</button><button data-v="dark">Scuro</button></span>
+      <span class="seg" id="vScreen"><button data-v="consulta">Feed</button><button data-v="cartelle">DIR</button><button data-v="calendario">CAL</button><button data-v="registra">REC</button></span>
+      <span class="seg" id="vZoom"><button data-v="1">1×</button><button data-v="1.5">1,5×</button><button data-v="2">2×</button></span>
+      <button id="pick" class="on" title="Clic su un elemento dell'anteprima per modificarlo">Seleziona</button>
+    </div>
+    <div id="stage">
+      <div class="dev" id="devP"><div class="wrap"><div class="fr"><iframe id="fP" title="JRN-1 verticale"></iframe></div></div><div class="cap" id="capP"></div></div>
+      <div class="dev" id="devL"><div class="wrap"><div class="fr"><iframe id="fL" title="JRN-1 orizzontale"></iframe></div></div><div class="cap" id="capL"></div></div>
+    </div>
+  </main>
+
+  <aside id="right">
+    <h3><span id="selName">Nessun elemento</span><span class="mono" id="selSize"></span></h3>
+    <div id="insp">
+      <div class="hint">Clicca un elemento nell'anteprima: qui compaiono le sue misure, le proprietà da cambiare e un campo per le note. I parametri a sinistra legati all'elemento vengono sottolineati.</div>
+    </div>
+    <div class="sec">
+      <span class="lbl">Note generali per Claude</span>
+      <textarea id="noteGen" rows="4" placeholder=""></textarea>
+    </div>
+    <div class="sec">
+      <span class="lbl">Modifiche (<span id="chgN">0</span>)</span>
+      <div class="chg-list" id="chgList"></div>
+    </div>
+  </aside>
+</div>
+<div id="toast"></div>
+<input type="file" id="jrnIn" accept=".html,text/html">
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const toast = (t) => { const el = $("toast"); el.textContent = t; el.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => (el.style.display = "none"), 1800); };
+
+/* ============ Parametri: valori di partenza = JRN-1 attuale ============ */
+// el: selettore dell'elemento a cui il parametro è legato (per l'ispettore). js: letto dallo script di JRN-1, non dal CSS.
+const P = [
+  // Token
+  { id: "tok.font", g: "Token", l: "Font", t: "text", d: '"Helvetica Neue", Helvetica, Arial, sans-serif', el: "#app" },
+  { id: "tok.size", g: "Token", l: "Dimensione testo", d: 16, u: "px", min: 8, max: 40, el: "#app" },
+  { id: "tok.lh", g: "Token", l: "Interlinea", d: 22, u: "px", min: 8, max: 60, el: "#app" },
+  { id: "tok.weight", g: "Token", l: "Peso testo", t: "sel", o: ["300", "400", "500", "700"], d: "400", el: "#app" },
+  { id: "tok.s1", g: "Token", l: "Spazio 1", d: 4, u: "px", min: 0, max: 40 },
+  { id: "tok.s2", g: "Token", l: "Spazio 2", d: 8, u: "px", min: 0, max: 40 },
+  { id: "tok.s3", g: "Token", l: "Spazio 3 (margini laterali)", d: 12, u: "px", min: 0, max: 60 },
+  { id: "tok.s4", g: "Token", l: "Spazio 4", d: 16, u: "px", min: 0, max: 60 },
+  { id: "tok.line", g: "Token", l: "Spessore linee", d: 1, u: "px", min: 0, max: 6, step: 0.5 },
+  { id: "tok.ctl", g: "Token", l: "Altezza controlli", d: 28, u: "px", min: 10, max: 60, el: "#theme" },
+  { id: "col.lbg", g: "Colori", l: "Chiaro: sfondo", t: "color", d: "#ffffff" },
+  { id: "col.link", g: "Colori", l: "Chiaro: inchiostro", t: "color", d: "#000000" },
+  { id: "col.dbg", g: "Colori", l: "Scuro: sfondo", t: "color", d: "#000000" },
+  { id: "col.dink", g: "Colori", l: "Scuro: inchiostro", t: "color", d: "#ffffff" },
+  { id: "col.led", g: "Colori", l: "LED registrazione", t: "color", d: "#ff3b30", el: ".led" },
+  // Barra in alto
+  { id: "top.h", g: "Barra in alto", l: "Altezza", d: 30, u: "px", min: 0, max: 80, el: ".top" },
+  { id: "top.px", g: "Barra in alto", l: "Margine laterale", d: 12, u: "px", min: 0, max: 60, el: ".top" },
+  { id: "theme.s", g: "Barra in alto", l: "Pallino tema", d: 14, u: "px", min: 4, max: 40, el: "#theme" },
+  // Display 2
+  { id: "d2.mt", g: "Display 2", l: "Distanza dalla barra in alto", d: 4, u: "px", min: 0, max: 60, el: "#d2" },
+  { id: "d2.mx", g: "Display 2", l: "Margine laterale", d: 12, u: "px", min: 0, max: 60, el: "#d2" },
+  { id: "d2.minh", g: "Display 2", l: "Altezza minima", d: 120, u: "px", min: 40, max: 600, el: "#d2" },
+  // Feed
+  { id: "it.pt", g: "Feed", l: "Nota: spazio sopra", d: 8, u: "px", min: 0, max: 40, el: ".it" },
+  { id: "it.px", g: "Feed", l: "Nota: spazio ai lati", d: 12, u: "px", min: 0, max: 40, el: ".it" },
+  { id: "it.pb", g: "Feed", l: "Nota: spazio sotto", d: 12, u: "px", min: 0, max: 40, el: ".it" },
+  { id: "it.nmb", g: "Feed", l: "Spazio sotto il nome", d: 4, u: "px", min: 0, max: 30, el: ".it .nm" },
+  { id: "it.dot", g: "Feed", l: "Pallino nota corrente", d: 5, u: "px", min: 0, max: 20, el: ".it" },
+  { id: "it.dash", g: "Feed", l: "Tratteggio stesso giorno", d: 2, u: "px", min: 1, max: 10, el: ".it" },
+  { id: "it.ck", g: "Feed", l: "Casella tasklist", d: 11, u: "px", min: 5, max: 30, el: ".it .ck" },
+  { id: "it.clamp", g: "Feed", l: "Righe di testo mostrate", d: 6, u: "", min: 1, max: 30, el: ".it .tx" },
+  { id: "it.img", g: "Feed", l: "Altezza max immagini", d: 260, u: "px", min: 40, max: 800, el: ".it img" },
+  { id: "it.wf", g: "Feed", l: "Altezza forma d'onda", d: 34, u: "px", min: 8, max: 120, el: ".it canvas.wf" },
+  { id: "dr.h", g: "Feed", l: "DIR: altezza riga", d: 36, u: "px", min: 16, max: 80, el: "#dirs .dr" },
+  { id: "cal.h", g: "Feed", l: "CAL: altezza giorno", d: 32, u: "px", min: 16, max: 80, el: ".cal-g div" },
+  { id: "cal.gap", g: "Feed", l: "CAL: spazio tra giorni", d: 2, u: "px", min: 0, max: 20, el: ".cal-g div" },
+  // Display 1
+  { id: "bar.h", g: "Display 1 e frecce", l: "Altezza Display 1", d: 44, u: "px", min: 20, max: 120, el: "#bar" },
+  { id: "bar.mt", g: "Display 1 e frecce", l: "Distanza dal Display 2", d: 8, u: "px", min: 0, max: 60, el: "#bar" },
+  { id: "bar.mx", g: "Display 1 e frecce", l: "Margine laterale", d: 12, u: "px", min: 0, max: 60, el: "#bar" },
+  { id: "d1.px", g: "Display 1 e frecce", l: "Display 1: rientro testo", d: 12, u: "px", min: 0, max: 40, el: "#d1" },
+  { id: "d1.gap", g: "Display 1 e frecce", l: "Display 1: spazio tra campi", d: 12, u: "px", min: 0, max: 40, el: "#d1" },
+  { id: "arr.w", g: "Display 1 e frecce", l: "Larghezza freccia (0 = quadrata)", d: 0, u: "px", min: 0, max: 120, el: "#arrows button" },
+  { id: "arr.icon", g: "Display 1 e frecce", l: "Triangolo freccia", d: 12, u: "px", min: 4, max: 40, el: "#arrows button" },
+  { id: "arr.side", g: "Display 1 e frecce", l: "Frecce", t: "sel", o: ["destra", "sinistra"], d: "destra", el: "#arrows" },
+  { id: "vu.h", g: "Display 1 e frecce", l: "VU meter: altezza", d: 12, u: "px", min: 2, max: 40, el: "#d1" },
+  // Controlli
+  { id: "ctl.pt", g: "Shift e ghiera", l: "Spazio sopra i controlli", d: 16, u: "px", min: 0, max: 80, el: "#ctl" },
+  { id: "ctl.px", g: "Shift e ghiera", l: "Margine laterale", d: 12, u: "px", min: 0, max: 80, el: "#ctl" },
+  { id: "ctl.pb", g: "Shift e ghiera", l: "Spazio sotto i controlli", d: 8, u: "px", min: 0, max: 80, el: "#ctl" },
+  { id: "shift.w", g: "Shift e ghiera", l: "Shift: larghezza", d: 72, u: "px", min: 20, max: 200, el: "#shift" },
+  { id: "shift.h", g: "Shift e ghiera", l: "Shift: altezza (0 = come ghiera)", d: 0, u: "px", min: 0, max: 400, el: "#shift", js: 1 },
+  { id: "shift.r", g: "Shift e ghiera", l: "Shift: raggio angoli", d: 9999, u: "px", min: 0, max: 9999, el: "#shift" },
+  { id: "led.size", g: "Shift e ghiera", l: "LED: diametro", d: 16, u: "px", min: 2, max: 60, el: ".led", js: 1 },
+  { id: "dial.size", g: "Shift e ghiera", l: "Ghiera: diametro fisso (0 = auto)", d: 0, u: "px", min: 0, max: 400, el: "#dial", js: 1 },
+  { id: "dial.min", g: "Shift e ghiera", l: "Ghiera auto: minimo", d: 150, u: "px", min: 40, max: 400, el: "#dial", js: 1 },
+  { id: "dial.max", g: "Shift e ghiera", l: "Ghiera auto: massimo", d: 220, u: "px", min: 40, max: 400, el: "#dial", js: 1 },
+  { id: "dial.wpct", g: "Shift e ghiera", l: "Ghiera auto: % larghezza", d: 58, u: "%", min: 10, max: 100, el: "#dial", js: 1 },
+  { id: "dial.hpct", g: "Shift e ghiera", l: "Ghiera auto: % altezza", d: 28, u: "%", min: 5, max: 60, el: "#dial", js: 1 },
+  { id: "dial.stroke", g: "Shift e ghiera", l: "Ghiera: spessore cerchio", d: 1, u: "px", min: 0.5, max: 8, step: 0.5, el: "#dial", js: 1 },
+  { id: "dial.dots", g: "Shift e ghiera", l: "Ghiera: numero pallini", d: 2, u: "", min: 0, max: 12, el: "#dial", js: 1 },
+  { id: "dial.dotr", g: "Shift e ghiera", l: "Ghiera: raggio pallini", d: 3.5, u: "%", min: 0.5, max: 20, step: 0.5, el: "#dial", js: 1 },
+  { id: "dial.ring", g: "Shift e ghiera", l: "Ghiera: distanza pallini", d: 82, u: "%", min: 10, max: 98, el: "#dial", js: 1 },
+  { id: "dial.centerShow", g: "Shift e ghiera", l: "Mostra zona centrale (solo anteprima)", t: "sel", o: ["no", "sì"], d: "no", el: "#dial", js: 1, preview: 1 },
+  // Orizzontale
+  { id: "land.d1", g: "Orizzontale", l: "Display 1: altezza relativa", d: 0.7, u: "fr", min: 0.2, max: 3, step: 0.05, el: "#bar" },
+  { id: "land.gap", g: "Orizzontale", l: "Spazio tra le file", d: 6, u: "px", min: 0, max: 30, el: "#kb" },
+  { id: "land.pad", g: "Orizzontale", l: "Margine minimo", d: 8, u: "px", min: 0, max: 60, el: "#app" },
+  { id: "kb.gap", g: "Orizzontale", l: "Griglia tastiera", d: 1, u: "px", min: 0, max: 10, el: "#kb" },
+  { id: "key.px", g: "Orizzontale", l: "Tasto: rientro orizzontale", d: 7, u: "px", min: 0, max: 30, el: ".k" },
+  { id: "key.py", g: "Orizzontale", l: "Tasto: rientro verticale", d: 4, u: "px", min: 0, max: 30, el: ".k" },
+  { id: "key.space", g: "Orizzontale", l: "Barra spaziatrice (× tasto)", d: 6, u: "×", min: 1, max: 12, step: 0.5, el: ".k" },
+  { id: "key.wide", g: "Orizzontale", l: "Tasti larghi (× tasto)", d: 1.5, u: "×", min: 1, max: 4, step: 0.25, el: ".k" },
+  { id: "land.shw", g: "Orizzontale", l: "Shift: larghezza", d: 140, u: "px", min: 30, max: 400, el: "#shift" },
+  { id: "land.ctlgap", g: "Orizzontale", l: "Spazio Shift-striscia", d: 28, u: "px", min: 0, max: 120, el: "#strip" },
+  { id: "strip.dots", g: "Orizzontale", l: "Striscia: pallini visibili", d: 2, u: "", min: 1, max: 12, el: "#strip", js: 1 },
+  { id: "strip.dotr", g: "Orizzontale", l: "Striscia: raggio pallini", d: 2.5, u: "px", min: 0.5, max: 10, step: 0.5, el: "#strip", js: 1 },
+  // Simulazione (non esportata come modifica)
+  { id: "sim.w", g: "Simulazione iPhone", l: "Larghezza schermo", d: 375, u: "pt", min: 280, max: 500, sim: 1 },
+  { id: "sim.h", g: "Simulazione iPhone", l: "Altezza schermo", d: 812, u: "pt", min: 500, max: 1000, sim: 1 },
+  { id: "sim.top", g: "Simulazione iPhone", l: "Zona sicura in alto", d: 50, u: "pt", min: 0, max: 80, sim: 1 },
+  { id: "sim.bot", g: "Simulazione iPhone", l: "Zona sicura in basso", d: 34, u: "pt", min: 0, max: 60, sim: 1 },
+  { id: "sim.side", g: "Simulazione iPhone", l: "Orizzontale: zona notch", d: 50, u: "pt", min: 0, max: 80, sim: 1 },
+  { id: "sim.lbot", g: "Simulazione iPhone", l: "Orizzontale: zona in basso", d: 21, u: "pt", min: 0, max: 60, sim: 1 },
+];
+const PI = Object.fromEntries(P.map((p) => [p.id, p]));
+
+/* Regole CSS: ognuna scatta se almeno uno dei suoi parametri è cambiato. Selettori uguali a quelli di JRN-1. */
+const R = [
+  { ids: ["tok.font", "tok.size", "tok.lh", "tok.weight"], css: (v) => `:root { --font-sans: ${v("tok.font")}; --text: ${v("tok.weight")} ${v("tok.size")}px/${v("tok.lh")}px var(--font-sans); }` },
+  { ids: ["tok.s1"], css: (v) => `:root { --space-1: ${v("tok.s1")}px; }` },
+  { ids: ["tok.s2"], css: (v) => `:root { --space-2: ${v("tok.s2")}px; }` },
+  { ids: ["tok.s3"], css: (v) => `:root { --space-3: ${v("tok.s3")}px; }` },
+  { ids: ["tok.s4"], css: (v) => `:root { --space-4: ${v("tok.s4")}px; }` },
+  { ids: ["tok.line"], css: (v) => `:root { --border-hairline: ${v("tok.line")}px; }` },
+  { ids: ["tok.ctl"], css: (v) => `:root { --control-height: ${v("tok.ctl")}px; }` },
+  { ids: ["col.lbg", "col.link"], css: (v) => `:root { --surface: ${v("col.lbg")}; --ink: ${v("col.link")}; --on-ink: ${v("col.lbg")}; }` },
+  { ids: ["col.dbg", "col.dink"], css: (v) => `:root[data-theme="dark"] { --surface: ${v("col.dbg")}; --ink: ${v("col.dink")}; --on-ink: ${v("col.dbg")}; }` },
+  { ids: ["col.led"], css: (v) => `:root { --led: ${v("col.led")}; }` },
+  { ids: ["top.h", "top.px"], css: (v) => `.top { height: ${v("top.h")}px; padding: 0 ${v("top.px")}px; }` },
+  { ids: ["theme.s"], css: (v) => `.top .theme svg { width: ${v("theme.s")}px; height: ${v("theme.s")}px; }` },
+  { ids: ["d2.mt", "d2.mx"], css: (v) => `#d2 { margin: ${v("d2.mt")}px ${v("d2.mx")}px 0; }` },
+  { ids: ["d2.minh"], css: (v) => `#d2 { min-height: ${v("d2.minh")}px; }` },
+  { ids: ["it.pt", "it.px", "it.pb"], css: (v) => `.it { padding: ${v("it.pt")}px ${v("it.px")}px ${v("it.pb")}px; }` },
+  { ids: ["it.nmb"], css: (v) => `.it .nm { margin-bottom: ${v("it.nmb")}px; }` },
+  { ids: ["it.dot"], css: (v) => `.it.sel::after { width: ${v("it.dot")}px; height: ${v("it.dot")}px; }` },
+  { ids: ["it.dash"], css: (v) => `.it.same { background: repeating-linear-gradient(90deg, var(--line) 0 ${v("it.dash")}px, transparent ${v("it.dash")}px ${2 * v("it.dash")}px) top left / 100% 1px no-repeat; }` },
+  { ids: ["it.ck"], css: (v) => `.it .ck { width: ${v("it.ck")}px; height: ${v("it.ck")}px; }` },
+  { ids: ["it.clamp"], css: (v) => `.it .tx { -webkit-line-clamp: ${v("it.clamp")}; }` },
+  { ids: ["it.img"], css: (v) => `.it img { max-height: ${v("it.img")}px; }` },
+  { ids: ["it.wf"], css: (v) => `.it canvas.wf { height: ${v("it.wf")}px; }` },
+  { ids: ["dr.h"], css: (v) => `#dirs .dr { height: ${v("dr.h")}px; }` },
+  { ids: ["cal.h"], css: (v) => `.cal-g div { height: ${v("cal.h")}px; }` },
+  { ids: ["cal.gap"], css: (v) => `.cal-g { gap: ${v("cal.gap")}px; }` },
+  { ids: ["bar.h"], css: (v) => `#bar { height: ${v("bar.h")}px; }` },
+  { ids: ["bar.mt", "bar.mx"], css: (v) => `#bar { margin: ${v("bar.mt")}px ${v("bar.mx")}px 0; }` },
+  { ids: ["d1.px", "d1.gap"], css: (v) => `#d1 .l1 { padding: 0 ${v("d1.px")}px; gap: ${v("d1.gap")}px; }\n#ed { padding: 0 ${v("d1.px")}px; }` },
+  { ids: ["arr.w"], css: (v) => `#arrows button { width: ${v("arr.w") ? v("arr.w") + "px" : "var(--bh, 44px)"}; }` },
+  { ids: ["arr.icon"], css: (v) => `#arrows svg { width: ${v("arr.icon")}px; height: ${v("arr.icon")}px; }` },
+  { ids: ["arr.side"], css: (v) => v("arr.side") === "sinistra" ? `#arrows { order: 0; margin-left: 0; margin-right: -1px; }` : "" },
+  { ids: ["vu.h"], css: (v) => `#d1c { height: ${v("vu.h")}px; }` },
+  { ids: ["ctl.pt", "ctl.px", "ctl.pb"], css: (v) => `#ctl { padding: ${v("ctl.pt")}px ${v("ctl.px")}px ${v("ctl.pb")}px; }` },
+  { ids: ["shift.w"], css: (v) => `#shift { width: ${v("shift.w")}px; }` },
+  { ids: ["shift.r"], css: (v) => `#shift { border-radius: ${v("shift.r")}px; }` },
+  { ids: ["led.size"], css: (v) => `.led { width: ${v("led.size")}px; height: ${v("led.size")}px; }` },
+  { ids: ["land.d1", "land.gap"], css: (v) => `body.land #app { grid-template-rows: ${v("land.d1")}fr 1fr 1fr 1fr 1fr 1fr; row-gap: ${v("land.gap")}px; }` },
+  { ids: ["kb.gap"], css: (v) => `body.land #kb { gap: ${v("kb.gap")}px; }\n.kr { gap: ${v("kb.gap")}px; }` },
+  { ids: ["key.px", "key.py"], css: (v) => `.k { padding: ${v("key.py")}px ${v("key.px")}px; }` },
+  { ids: ["key.space"], css: (v) => `.k.w6 { flex-grow: ${v("key.space")}; }` },
+  { ids: ["key.wide"], css: (v) => `.k.w15 { flex-grow: ${v("key.wide")}; }` },
+  { ids: ["land.shw"], css: (v) => `body.land #shift { width: ${v("land.shw")}px; }` },
+  { ids: ["land.ctlgap"], css: (v) => `body.land #ctl { gap: ${v("land.ctlgap")}px; }` },
+];
+// Dove si trovano in JRN-1 i parametri letti dallo script
+const JSDOC = {
+  "shift.h": "layout(): shiftB.style.height (ora = D.size)",
+  "led.size": "layout(): posizione LED usa metà diametro (ora 8) + CSS .led 16px",
+  "dial.size": "layout(): D.size fisso invece della formula",
+  "dial.min": "layout(): D.size = max(150, …)", "dial.max": "layout(): min(220, …)",
+  "dial.wpct": "layout(): W * 0.58", "dial.hpct": "layout(): app.clientHeight * 0.28",
+  "dial.stroke": "drawDial(): lineWidth", "dial.dots": "drawDial(): for (k of [0, PI]) → n pallini equidistanti",
+  "dial.dotr": "drawDial(): R * 0.035", "dial.ring": "drawDial(): rr = R * 0.82",
+  "strip.dots": "drawStrip(): gap = W / 2", "strip.dotr": "drawStrip(): r = 2.5",
+};
+
+/* Elementi selezionabili: dal più specifico al più generico */
+const EL = [
+  ["#theme", "Pallino tema"], [".top", "Barra in alto"],
+  [".it .ck", "Casella tasklist"], [".it .nm", "Nome nota"], [".it .ev", "Data evento"], [".it .fd", "Cartella della nota"],
+  [".it .tx", "Testo nota"], [".it img", "Immagine nota"], [".it canvas.wf", "Forma d'onda"], [".it", "Nota nel feed"],
+  [".cal-h", "Calendario: mese"], [".cal-g div", "Calendario: giorno"], [".cal-n", "Calendario: riepilogo"], ["#dirs .dr", "Riga cartella"],
+  ["#d2", "Display 2"],
+  ["#arrows button", "Freccia"], ["#arrows", "Frecce"],
+  ["#d1m", "Display 1: modalità"], ["#d1v", "Display 1: testo"], ["#d1c", "Display 1: VU meter"], ["#d1t", "Display 1: tempo"], ["#ed", "Display 1: testo in scrittura"],
+  ["#d1", "Display 1"], ["#bar", "Barra Display 1"],
+  [".led", "LED"], ["#shift", "Shift"], ["#dial", "Ghiera"],
+  [".k", "Tasto"], ["#kb", "Tastiera"], ["#strip", "Striscia"], ["#ctl", "Controlli"], ["#app", "App"],
+];
+const ELNAME = Object.fromEntries(EL);
+const FREE = ["width", "height", "margin", "padding", "font-size", "line-height", "font-weight", "letter-spacing", "text-align", "gap", "border-width", "border-radius"];
+
+/* ============ Stato ============ */
+const blank = () => ({ v: {}, free: {}, notes: {}, general: "" });
+let S = Object.assign(blank(), store.get("edt1-state", {}));
+let V = Object.assign({ ori: "both", theme: "light", screen: "consulta", zoom: 1, pick: true }, store.get("edt1-view", {}));
+const undoS = [], redoS = [];
+const val = (id) => (id in S.v ? S.v[id] : PI[id].d);
+const changed = (id) => id in S.v && S.v[id] !== PI[id].d;
+let snapT = 0, lastSnap = JSON.stringify(S);
+function commit(immediate) {
+  store.set("edt1-state", S);
+  clearTimeout(snapT);
+  const doSnap = () => { const now = JSON.stringify(S); if (now !== lastSnap) { undoS.push(lastSnap); if (undoS.length > 200) undoS.shift(); redoS.length = 0; lastSnap = now; } updUndo(); };
+  if (immediate) doSnap(); else snapT = setTimeout(doSnap, 400);
+}
+function updUndo() { $("undo").disabled = !undoS.length; $("redo").disabled = !redoS.length; }
+function restore(json) { S = Object.assign(blank(), JSON.parse(json)); lastSnap = json; store.set("edt1-state", S); buildLeft(); applyAll(); renderInsp(); $("noteGen").value = S.general || ""; updUndo(); }
+$("undo").onclick = () => { clearTimeout(snapT); const now = JSON.stringify(S); if (now !== lastSnap) { undoS.push(lastSnap); lastSnap = now; } if (!undoS.length) return; redoS.push(JSON.stringify(S)); restore(undoS.pop()); };
+$("redo").onclick = () => { if (!redoS.length) return; undoS.push(JSON.stringify(S)); restore(redoS.pop()); };
+document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); (e.shiftKey ? $("redo") : $("undo")).click(); } });
+$("reset").onclick = () => { if (!confirm("Riportare tutto come in JRN-1 attuale? Le note vengono cancellate. Si può annullare.")) return; const sim = {}; for (const k in S.v) if (PI[k] && PI[k].sim) sim[k] = S.v[k]; S = blank(); S.v = sim; commit(true); buildLeft(); applyAll(); renderInsp(); $("noteGen").value = ""; };
+
+/* ============ Pannello parametri ============ */
+const openG = new Set(store.get("edt1-open", ["Token", "Shift e ghiera"]));
+function buildLeft() {
+  const L = $("left"); L.innerHTML = '<div class="hint">Valori di partenza = JRN-1 attuale. Il pallino rosso segna ciò che hai cambiato; ↺ lo riporta com\'era. Rotella del mouse sui numeri per regolare.</div>';
+  const groups = [...new Set(P.map((p) => p.g))];
+  for (const g of groups) {
+    const d = document.createElement("details"); d.className = "grp"; d.open = openG.has(g); d.dataset.g = g;
+    const n = P.filter((p) => p.g === g && changed(p.id)).length;
+    d.innerHTML = `<summary><span>${g}</span><span class="n">${n ? n + "  " : ""}</span></summary><div class="rows"></div>`;
+    d.addEventListener("toggle", () => { d.open ? openG.add(g) : openG.delete(g); store.set("edt1-open", [...openG]); });
+    const rows = d.querySelector(".rows");
+    for (const p of P.filter((x) => x.g === g)) rows.appendChild(rowEl(p));
+    L.appendChild(d);
+  }
+  markHot();
+}
+function rowEl(p) {
+  const r = document.createElement("div"); r.className = "row" + (changed(p.id) ? " chg" : ""); r.dataset.id = p.id;
+  const cur = val(p.id); let inp;
+  if (p.t === "sel") inp = `<select>${p.o.map((o) => `<option${o === cur ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+  else if (p.t === "color") inp = `<input type="text" class="mono" value="${cur}" style="width:74px"><input type="color" value="${cur}">`;
+  else if (p.t === "text") inp = `<input type="text" value="${String(cur).replace(/"/g, "&quot;")}">`;
+  else inp = `<input type="number" value="${cur}" min="${p.min}" max="${p.max}" step="${p.step || 1}"><span class="u">${p.u}</span>`;
+  r.innerHTML = `<span class="dot"></span><label title="${p.l}${p.js ? " (script)" : ""}">${p.l}</label><span class="in">${inp}</span><button class="rs" title="Com'era: ${p.d}">↺</button>`;
+  const set = (x) => {
+    if (p.t !== "sel" && p.t !== "color" && p.t !== "text") { x = parseFloat(x); if (isNaN(x)) return; }
+    if (x === p.d) delete S.v[p.id]; else S.v[p.id] = x;
+    r.classList.toggle("chg", changed(p.id)); commit(); applyAll(); updGroupCount(r);
+  };
+  r.querySelectorAll("input, select").forEach((el) => {
+    el.addEventListener("input", () => { if (p.t === "color") { const o = r.querySelectorAll("input"); (el.type === "color" ? o[0] : o[1]).value = el.value; if (!/^#[0-9a-f]{6}$/i.test(el.value)) return; } set(el.value); });
+    if (el.type === "number") el.addEventListener("wheel", (e) => { if (document.activeElement !== el) return; e.preventDefault(); const st = (p.step || 1) * (e.shiftKey ? 10 : 1); let x = +el.value + (e.deltaY < 0 ? st : -st); x = Math.max(p.min, Math.min(p.max, Math.round(x * 100) / 100)); el.value = x; set(x); }, { passive: false });
+  });
+  r.querySelector(".rs").onclick = () => { delete S.v[p.id]; const n = rowEl(p); r.replaceWith(n); commit(true); applyAll(); updGroupCount(n); markHot(); };
+  return r;
+}
+function updGroupCount(r) { const d = r.closest(".grp"); if (!d) return; const n = P.filter((p) => p.g === d.dataset.g && changed(p.id)).length; d.querySelector(".n").textContent = n ? n + "  " : ""; }
+
+/* ============ Anteprima ============ */
+let JRN = null;   // { css, markup, base }
+async function loadJrn() {
+  const tries = ["/h6t3-v/index.html", "../index.html", "jrn-snapshot.html"];
+  for (const u of tries) {
+    try {
+      const r = await fetch(u, { cache: "no-cache" }); if (!r.ok) continue;
+      const html = await r.text(); const got = parseJrn(html); if (!got) continue;
+      let base = "";
+      try { const sw = await (await fetch(u.replace(/index\.html$|jrn-snapshot\.html$/, u.endsWith("jrn-snapshot.html") ? "jrn-snapshot-sw.js" : "sw.js"), { cache: "no-cache" })).text(); base = (sw.match(/CACHE\s*=\s*"([^"]+)"/) || [])[1] || ""; } catch (e) {}
+      JRN = Object.assign(got, { base, from: u.endsWith("jrn-snapshot.html") ? "copia salvata nell'editor" : "dal vivo" });
+      return true;
+    } catch (e) {}
+  }
+  return false;
+}
+function parseJrn(html) {
+  const css = (html.match(/<style>([\s\S]*?)<\/style>/) || [])[1];
+  const a = html.indexOf('<div id="app">'), b = html.indexOf('<input type="file" id="fin"');
+  if (!css || a < 0 || b < 0) return null;
+  return { css, markup: html.slice(a, b) };
+}
+function setSrc() { $("src").textContent = JRN ? `JRN-1 ${JRN.base ? JRN.base.replace("jrn1-", "") : ""} · stile ${JRN.from}` : "JRN-1 non trovato"; }
+
+const MOCK_URL = new URL("mock.js", location.href).href;
+const HL_CSS = `.edt-hl{position:fixed;pointer-events:none;z-index:99999;outline:2px solid #ff3b30;outline-offset:-1px;display:none}
+.edt-hv{position:fixed;pointer-events:none;z-index:99998;outline:1px dashed #ff3b30;outline-offset:-1px;display:none}
+html.edt-pick *{cursor:crosshair!important}`;
+function frameDoc(land) {
+  return `<!DOCTYPE html><html lang="it" data-theme="${V.theme}"><head><meta charset="utf-8"><style>${JRN.css}</style><style id="sim"></style><style id="ovr"></style><style id="free"></style><style>${HL_CSS}</style></head>` +
+    `<body class="${land ? "land" : ""}">${JRN.markup}<div class="edt-hv"></div><div class="edt-hl"></div><script src="${MOCK_URL}"><\/script></body></html>`;
+}
+const frames = { P: $("fP"), L: $("fL") };
+function buildFrames() {
+  for (const k of ["P", "L"]) {
+    const f = frames[k];
+    f.onload = () => { hookFrame(f); applyFrame(f); };
+    f.srcdoc = frameDoc(k === "L");
+  }
+}
+function sizes() { const w = val("sim.w"), h = val("sim.h"); return { P: [w, h], L: [h, w] }; }
+function layoutStage() {
+  const s = sizes(), z = +V.zoom;
+  for (const k of ["P", "L"]) {
+    const f = frames[k], [w, h] = s[k], fr = f.parentElement, wrap = fr.parentElement;
+    f.style.width = w + "px"; f.style.height = h + "px";
+    fr.style.transform = `scale(${z})`; wrap.style.width = w * z + 2 + "px"; wrap.style.height = h * z + 2 + "px";
+    $("cap" + k).textContent = (k === "P" ? "Verticale " : "Orizzontale ") + w + " × " + h + " pt";
+  }
+  $("devP").style.display = V.ori === "land" ? "none" : ""; $("devL").style.display = V.ori === "port" ? "none" : "";
+}
+function cssOverrides() {
+  const out = [];
+  for (const r of R) if (r.ids.some(changed)) { const c = r.css(val); if (c) out.push(c); }
+  return out.join("\n");
+}
+function cssFree() {
+  const out = [];
+  for (const key in S.free) {
+    const [scope, sel] = splitKey(key), props = S.free[key], body = Object.entries(props).filter(([, x]) => x !== "").map(([k, x]) => `${k}: ${x} !important;`).join(" ");
+    if (!body) continue;
+    const pre = scope === "port" ? "body:not(.land) " : scope === "land" ? "body.land " : "";
+    out.push(sel.split(",").map((s) => pre + s.trim()).join(", ") + " { " + body + " }");
+  }
+  return out.join("\n");
+}
+const splitKey = (k) => { const i = k.indexOf("|"); return [k.slice(0, i), k.slice(i + 1)]; };
+function simCss() {
+  return `#app { padding: ${val("sim.top")}px 0 ${val("sim.bot")}px; }
+body.land #app { padding: var(--space-2) max(var(--space-2), ${val("sim.side")}px) max(var(--space-2), ${val("sim.lbot")}px) max(var(--space-2), ${val("sim.side")}px); }` +
+    (changed("land.pad") ? `\nbody.land #app { padding: ${val("land.pad")}px max(${val("land.pad")}px, ${val("sim.side")}px) max(${val("land.pad")}px, ${val("sim.lbot")}px) max(${val("land.pad")}px, ${val("sim.side")}px); }` : "");
+}
+function cfg() { const c = {}; for (const p of P) if (p.js) c[p.id] = p.id === "dial.centerShow" ? val(p.id) === "sì" : val(p.id); return c; }
+function applyFrame(f) {
+  const d = f.contentDocument; if (!d || !d.getElementById("ovr") || !f.contentWindow.MOCK) { if (d && d.getElementById("ovr")) setTimeout(() => applyFrame(f), 50); return; }
+  d.documentElement.dataset.theme = V.theme;
+  d.getElementById("sim").textContent = simCss();
+  d.getElementById("ovr").textContent = cssOverrides();
+  d.getElementById("free").textContent = cssFree();
+  d.documentElement.classList.toggle("edt-pick", V.pick);
+  f.contentWindow.MOCK.apply(cfg(), V.screen);
+  requestAnimationFrame(() => requestAnimationFrame(() => { drawHl(f); if (f === selFrame) renderSize(); }));
+}
+function applyAll() { layoutStage(); for (const k of ["P", "L"]) applyFrame(frames[k]); renderChanges(); }
+
+/* ============ Selezione ============ */
+let sel = null, selFrame = null, selEl = null;
+function match(el) {
+  for (let n = el; n && n.nodeType === 1; n = n.parentElement) for (const [s] of EL) if (n.matches(s)) return { s, n };
+  return null;
+}
+function hookFrame(f) {
+  const d = f.contentDocument;
+  d.addEventListener("click", (e) => {
+    if (!V.pick) return; e.preventDefault(); e.stopPropagation();
+    const m = match(e.target); if (!m) return;
+    sel = m.s; selFrame = f; selEl = m.n; renderInsp(); for (const k of ["P", "L"]) drawHl(frames[k]); markHot();
+  }, true);
+  ["pointerdown", "pointerup"].forEach((t) => d.addEventListener(t, (e) => { if (V.pick) e.stopPropagation(); }, true));
+  d.addEventListener("mousemove", (e) => {
+    const hv = d.querySelector(".edt-hv"); if (!V.pick) { hv.style.display = "none"; return; }
+    const m = match(e.target); if (!m) { hv.style.display = "none"; return; }
+    place(hv, m.n.getBoundingClientRect()); hv.title = ELNAME[m.s];
+  });
+  d.addEventListener("mouseleave", () => (d.querySelector(".edt-hv").style.display = "none"));
+}
+function place(box, b) { Object.assign(box.style, { display: "block", left: b.left + "px", top: b.top + "px", width: b.width + "px", height: b.height + "px" }); }
+function drawHl(f) {
+  const d = f.contentDocument; if (!d) return; const hl = d.querySelector(".edt-hl"); if (!hl) return;
+  if (!sel) { hl.style.display = "none"; return; }
+  let n = f === selFrame && selEl && selEl.isConnected ? selEl : null;
+  if (!n) { const all = [...d.querySelectorAll(sel)].filter((x) => x.getClientRects().length); n = all[0]; if (f === selFrame) selEl = n; }
+  if (!n || !n.getClientRects().length) { hl.style.display = "none"; return; }
+  place(hl, n.getBoundingClientRect());
+}
+function markHot() { document.querySelectorAll("#left .row").forEach((r) => r.classList.toggle("hot", !!sel && PI[r.dataset.id].el === sel)); }
+function renderSize() {
+  if (!selEl || !selEl.isConnected) { $("selSize").textContent = ""; return; }
+  const b = selEl.getBoundingClientRect(); $("selSize").textContent = Math.round(b.width * 10) / 10 + " × " + Math.round(b.height * 10) / 10;
+}
+let scope = "all";
+function renderInsp() {
+  const I = $("insp");
+  if (!sel) { $("selName").textContent = "Nessun elemento"; $("selSize").textContent = ""; return; }
+  $("selName").textContent = ELNAME[sel]; renderSize();
+  const cs = selEl && selEl.ownerDocument.defaultView.getComputedStyle(selEl);
+  const rel = P.filter((p) => p.el === sel);
+  const key = scope + "|" + sel, fv = S.free[key] || {};
+  I.innerHTML = `
+    <div class="sec"><span class="lbl">Selettore in JRN-1</span><span class="mono">${sel}</span></div>
+    ${rel.length ? `<div class="sec"><span class="lbl">Parametri di questo elemento</span><div id="relRows"></div></div>` : ""}
+    <div class="sec"><span class="lbl">Proprietà libere (campo vuoto = com'è ora, il valore attuale è indicato nel campo)</span>
+      <div class="kv" style="margin-bottom:8px"><span>Vale per</span><select id="scope"><option value="all">entrambe</option><option value="port">solo verticale</option><option value="land">solo orizzontale</option></select></div>
+      <div class="kv" id="freeRows"></div>
+      <div class="kv" style="margin-top:6px"><input type="text" id="fxName" placeholder="altra proprietà" class="mono"><input type="text" id="fxVal" placeholder="valore" class="mono"></div>
+    </div>
+    <div class="sec"><span class="lbl">Nota su questo elemento</span><textarea id="noteEl" rows="4"></textarea></div>`;
+  $("scope").value = scope; $("scope").onchange = (e) => { scope = e.target.value; renderInsp(); };
+  if (rel.length) { const box = $("relRows"); rel.forEach((p) => box.appendChild(rowEl(p))); }
+  const fr = $("freeRows"), names = [...new Set(FREE.concat(Object.keys(fv)))];
+  for (const k of names) {
+    const lab = document.createElement("span"); lab.className = "mono"; lab.textContent = k;
+    const inp = document.createElement("input"); inp.type = "text"; inp.className = "mono"; inp.value = fv[k] || ""; inp.placeholder = cs ? cs.getPropertyValue(k) : "";
+    if (fv[k]) lab.style.textDecoration = "underline";
+    inp.oninput = () => { setFree(key, k, inp.value.trim()); lab.style.textDecoration = inp.value.trim() ? "underline" : ""; };
+    fr.append(lab, inp);
+  }
+  const addFx = () => { const n = $("fxName").value.trim(), x = $("fxVal").value.trim(); if (!n || !x) return; setFree(key, n, x); renderInsp(); };
+  $("fxVal").onkeydown = (e) => { if (e.key === "Enter") addFx(); }; $("fxVal").onchange = addFx;
+  const ne = $("noteEl"); ne.value = S.notes[sel] || "";
+  ne.oninput = () => { if (ne.value.trim()) S.notes[sel] = ne.value; else delete S.notes[sel]; commit(); renderChanges(); };
+}
+function setFree(key, k, x) {
+  const o = S.free[key] || (S.free[key] = {});
+  if (x) o[k] = x; else delete o[k];
+  if (!Object.keys(o).length) delete S.free[key];
+  commit(); applyAll();
+}
+$("noteGen").value = S.general || "";
+$("noteGen").oninput = (e) => { S.general = e.target.value; commit(); };
+
+/* ============ Elenco modifiche ============ */
+function changeList() {
+  return P.filter((p) => !p.sim && !p.preview && changed(p.id)).map((p) => ({ id: p.id, gruppo: p.g, parametro: p.l, da: p.d, a: val(p.id), unita: p.u || "", dove: p.js ? "script: " + JSDOC[p.id] : "css" }));
+}
+function renderChanges() {
+  const L = changeList(), F = Object.keys(S.free), N = Object.keys(S.notes);
+  $("chgN").textContent = L.length + F.length + N.length;
+  const h = [];
+  for (const c of L) h.push(`<div><span>${c.parametro}</span><b>${c.da} → ${c.a}${c.unita && c.unita.length < 3 ? " " + c.unita : ""}</b></div>`);
+  for (const k of F) { const [sc, s] = splitKey(k); h.push(`<div><span>${ELNAME[s] || s}${sc !== "all" ? " (" + (sc === "port" ? "vert." : "oriz.") + ")" : ""}</span><b class="mono">${Object.entries(S.free[k]).map(([a, b]) => a + ": " + b).join("; ")}</b></div>`); }
+  for (const s of N) h.push(`<div><span>Nota: ${ELNAME[s] || s}</span><b>✎</b></div>`);
+  $("chgList").innerHTML = h.join("") || '<span class="empty">Ancora nessuna modifica.</span>';
+}
+
+/* ============ Export / import ============ */
+function exportObj() {
+  const free = Object.keys(S.free).map((k) => { const [sc, s] = splitKey(k); return { elemento: ELNAME[s] || s, selettore: s, vale_per: sc === "all" ? "entrambe" : sc === "port" ? "verticale" : "orizzontale", proprieta: S.free[k] }; });
+  const tokens = {};
+  const tmap = { "tok.s1": "--space-1", "tok.s2": "--space-2", "tok.s3": "--space-3", "tok.s4": "--space-4", "tok.line": "--border-hairline", "tok.ctl": "--control-height", "col.led": "--led", "tok.font": "--font-sans" };
+  for (const id in tmap) if (changed(id)) tokens[tmap[id]] = typeof val(id) === "number" ? val(id) + "px" : val(id);
+  if (["tok.size", "tok.lh", "tok.weight", "tok.font"].some(changed)) tokens["--text"] = `${val("tok.weight")} ${val("tok.size")}px/${val("tok.lh")}px var(--font-sans)`;
+  return {
+    formato: "EDT-1 modifiche UI", versione: 1, app: "JRN-1", base: JRN && JRN.base ? JRN.base : "", data: new Date().toISOString(),
+    istruzioni: "Applica a JRN-1 (repo h6t3-v) le modifiche qui sotto. 'css' contiene le regole pronte: valgono dopo il CSS attuale, stessi selettori. I parametri con dove='script: …' vanno cambiati nel codice indicato. Leggi le note.",
+    schermo_simulato: { larghezza: val("sim.w"), altezza: val("sim.h"), zona_sicura_alto: val("sim.top"), zona_sicura_basso: val("sim.bot") },
+    modifiche: changeList(), token: tokens, proprieta_libere: free,
+    note_generali: S.general || "", note_elementi: Object.keys(S.notes).map((s) => ({ elemento: ELNAME[s] || s, selettore: s, nota: S.notes[s] })),
+    css: [cssOverrides(), cssFree()].filter(Boolean).join("\n"),
+    script: Object.fromEntries(P.filter((p) => p.js && !p.preview && changed(p.id)).map((p) => [p.id, val(p.id)])),
+    stato_editor: S,
+  };
+}
+function stamp() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return String(d.getFullYear() % 100) + p(d.getMonth() + 1) + p(d.getDate()) + "_" + p(d.getHours()) + p(d.getMinutes()); }
+$("exp").onclick = () => {
+  const b = new Blob([JSON.stringify(exportObj(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "jrn1-ui-" + stamp() + ".json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("File salvato: passalo a Claude nel thread di JRN-1");
+};
+$("copy").onclick = async () => {
+  const o = exportObj(); delete o.stato_editor;
+  const txt = "Modifiche all'interfaccia di JRN-1 fatte con EDT-1. Applicale:\n\n```json\n" + JSON.stringify(o, null, 2) + "\n```";
+  try { await navigator.clipboard.writeText(txt); toast("Copiato: incollalo nel thread di JRN-1"); }
+  catch (e) { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); toast("Copiato"); }
+};
+$("imp").onclick = () => $("fileIn").click();
+$("fileIn").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = "";
+  try { const o = JSON.parse(await f.text()); const st = o.stato_editor || o; if (!st.v) throw 0; undoS.push(JSON.stringify(S)); restore(JSON.stringify(Object.assign(blank(), st))); toast("Importato"); }
+  catch (er) { toast("File non riconosciuto"); }
+};
+
+/* ============ Barra strumenti ============ */
+function seg(id, key, after) {
+  const box = $(id);
+  const paint = () => box.querySelectorAll("button").forEach((b) => b.classList.toggle("on", String(V[key]) === b.dataset.v));
+  box.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; V[key] = b.dataset.v; store.set("edt1-view", V); paint(); after && after(); });
+  paint();
+}
+seg("vOri", "ori", applyAll);
+seg("vTheme", "theme", applyAll);
+seg("vScreen", "screen", () => { applyAll(); });
+seg("vZoom", "zoom", layoutStage);
+const paintPick = () => $("pick").classList.toggle("on", V.pick);
+$("pick").onclick = () => { V.pick = !V.pick; store.set("edt1-view", V); paintPick(); applyAll(); };
+paintPick();
+window.addEventListener("resize", () => { for (const k of ["P", "L"]) drawHl(frames[k]); });
+
+/* ============ Avvio ============ */
+(async () => {
+  buildLeft(); updUndo(); layoutStage(); renderChanges();
+  const ok = await loadJrn(); setSrc();
+  if (!ok) { $("src").innerHTML = 'Non riesco a leggere JRN-1. <button id="pickJrn">Apri index.html di JRN-1…</button>'; $("pickJrn").onclick = () => $("jrnIn").click(); return; }
+  buildFrames();
+})();
+$("jrnIn").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const g = parseJrn(await f.text()); if (!g) { toast("Non è JRN-1"); return; } JRN = Object.assign(g, { base: "", from: "da file" }); setSrc(); buildFrames(); };
+</script>
+</body>
+</html>

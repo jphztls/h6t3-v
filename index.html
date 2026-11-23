@@ -46,7 +46,8 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .it { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--border-hairline) solid var(--line); }
 .it:first-child { border-top: 0; }
 .it .nm { display: inline-block; padding: 0 3px; margin: 0 -3px 4px; font-variant-numeric: tabular-nums; }
-.it.sel .nm { background: var(--surface-inverse); color: var(--ink-inverse); }
+.it.sel .nm { outline: var(--border-hairline) solid var(--line); outline-offset: 0; }   /* scelta: solo un contorno 1px */
+.it.same { border-top: 0; background: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 2px) top left / 100% 1px no-repeat; }   /* stesso giorno: tratteggio 1px 1px */
 .it .tx { white-space: pre-wrap; word-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .it img { display: block; width: 100%; max-height: 260px; object-fit: contain; object-position: left center; }
 .it canvas.wf { display: block; width: 100%; height: 34px; }
@@ -113,11 +114,19 @@ body.land .top, body.land #d2, body.land #dial { display: none; }
 body.land #bar { grid-row: 1; height: auto; margin: 0; min-height: 0; min-width: 0; }
 body.land #ed { display: flex; }
 body.land #d1 .l1, body.land #d1c { display: none; }
-body.land #kb { grid-row: 2 / 6; display: flex; flex-direction: column; gap: 1px; min-height: 0; background: var(--line); border: var(--border-hairline) solid var(--line); }
-.kr { display: flex; gap: 1px; flex: 1; min-height: 0; }
-.k { flex: 1 1 0; min-width: 0; display: flex; align-items: flex-start; justify-content: flex-start; padding: 4px 7px; background: var(--surface); touch-action: none; overflow: hidden; }
+body.land #kb { grid-row: 2 / 6; display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+.kr { display: flex; gap: 3px; flex: 1; min-height: 0; }
+/* Tasto a rilievo disegnato a linee 1px: base, smussi, faccia superiore incavata; premuto si abbassa */
+.k { position: relative; flex: 1 1 0; min-width: 0; touch-action: none; overflow: hidden; }
+.k svg.cap { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.k svg.cap path, .k svg.cap rect { fill: none; stroke: var(--ink); stroke-width: 1; shape-rendering: crispEdges; }
+.k svg.cap .curve { shape-rendering: auto; }
+.k .lb { position: absolute; left: 11px; top: 7px; line-height: 20px; }
+.k.down .lb { left: 12px; top: 11px; }
+.k .lb svg { display: block; height: 20px; }
+.k .lb svg path, .k .lb svg circle { fill: none; stroke: var(--ink); stroke-width: 1; }
+.k .lb svg .fill { fill: var(--ink); }
 .k.w15 { flex-grow: 1.5; } .k.w6 { flex-grow: 6; }
-.k.down, .k.lit { background: var(--surface-inverse); color: var(--ink-inverse); }
 body.land #ctl { grid-row: 6; padding: 0; gap: 28px; min-height: 0; }
 body.land #shift { width: 140px; flex: none; align-self: stretch; }
 body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }
@@ -364,7 +373,7 @@ function renderFeed() {
   feed.innerHTML = ""; const L = vis();
   sel = Math.max(0, Math.min(L.length - 1, sel));
   L.forEach((it, i) => {
-    const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : ""); el.dataset.i = i;
+    const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : "") + (i && L[i - 1].name.slice(0, 6) === it.name.slice(0, 6) ? " same" : ""); el.dataset.i = i;
     const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = it.name; el.appendChild(nm);
     parts(it).forEach((_, k) => el.appendChild(partEl(it, k)));
     feed.appendChild(el);
@@ -883,18 +892,37 @@ function renderKb() {
   });
   labelKb();
 }
-function labelKb() {                           // aggiorna solo le etichette: i tasti restano gli stessi elementi
-  for (const b of kb.children.length ? kb.querySelectorAll(".k") : []) {
-    const k = b.dataset.k;
-    b.textContent = k === " " ? "" : k === "⇧" && caps === 2 ? "⇪" : kbPage === "abc" && caps && /^[a-z]$/.test(k) ? k.toUpperCase() : k;
-    b.classList.toggle("lit", k === "⇧" && !!caps);
-  }
+/* Icone a linee 1px: shift (pieno se attivo, pallino se bloccato), cancella largo, invio */
+const ICON = {
+  "⇧": (on, lock) => '<svg viewBox="0 0 30 20" width="30"><path class="' + (on ? "fill" : "") + '" d="M9.5 18.5 V10.5 H3.5 L15 1.5 L26.5 10.5 H20.5 V18.5 Z"/>' + (lock ? '<circle class="fill" cx="15" cy="13.5" r="0"/>' : "") + "</svg>" + (lock ? '<svg viewBox="0 0 8 8" width="8" style="position:absolute;left:36px;top:6px;height:8px"><circle class="fill" cx="4" cy="4" r="3.5"/></svg>' : ""),
+  "⌫": () => '<svg viewBox="0 0 40 20" width="40"><path d="M10.5 1.5 H38.5 V18.5 H10.5 L1.5 10 Z M19.5 6 L28.5 14 M28.5 6 L19.5 14"/></svg>',
+  "⏎": () => '<svg viewBox="0 0 36 20" width="36"><path d="M34.5 1.5 V12.5 H3.5 M9.5 6.5 L3.5 12.5 L9.5 18.5"/></svg>',
+};
+function capSvg(w, h, down) {
+  const X = (v) => Math.round(v) + 0.5, oy = down ? 3 : 0;                // da premuto la calotta scende di 3px
+  const T = down ? 3 : 4, Sd = down ? 8 : 7, B = down ? 7 : 11, dip = down ? 3 : 4;   // smussi: alto, lati, basso
+  const x0 = X(0), x1 = X(w - 1), y0 = X(oy), y1 = X(h - 1);
+  const fx0 = X(Sd), fx1 = X(w - 1 - Sd), fy0 = X(oy + T), fy1 = X(h - 1 - B);
+  let d = "M" + x0 + " " + y0 + "H" + x1 + "V" + y1 + "H" + x0 + "Z";           // contorno della calotta
+  d += "M" + fx0 + " " + fy1 + "V" + fy0 + "H" + fx1 + "V" + fy1;               // faccia superiore (lati e bordo alto)
+  d += "M" + x0 + " " + y0 + "L" + fx0 + " " + fy0 + "M" + x1 + " " + y0 + "L" + fx1 + " " + fy0;   // spigoli
+  d += "M" + x0 + " " + y1 + "L" + fx0 + " " + fy1 + "M" + x1 + " " + y1 + "L" + fx1 + " " + fy1;
+  const base = down ? '<path d="M' + x0 + " " + X(0) + "H" + x1 + '"/>' : "";       // bordo della base, rimasto in alto
+  return '<svg class="cap">' + base + '<path d="' + d + '"/><path class="curve" d="M' + fx0 + " " + fy1 + "Q" + (w / 2) + " " + (fy1 + dip * 2) + " " + fx1 + " " + fy1 + '"/></svg>';
 }
+function drawKey(b) {
+  const k = b.dataset.k, w = b.clientWidth, h = b.clientHeight; if (!w) return;
+  let lab;
+  if (ICON[k]) lab = ICON[k](!!caps, caps === 2);
+  else lab = esc(k === " " ? "" : kbPage === "abc" && caps && /^[a-z]$/.test(k) ? k.toUpperCase() : k);
+  b.innerHTML = capSvg(w, h, b.classList.contains("down")) + '<span class="lb">' + lab + "</span>";
+}
+function labelKb() { for (const b of kb.querySelectorAll(".k")) drawKey(b); }
 let rep = 0, downKey = null;
-function keyUp() { clearTimeout(rep); if (downKey) { downKey.classList.remove("down"); mech(false); downKey = null; } }
+function keyUp() { clearTimeout(rep); if (downKey) { const b = downKey; downKey = null; b.classList.remove("down"); drawKey(b); mech(false); } }
 kb.addEventListener("pointerdown", (e) => {
   const b = e.target.closest(".k"); if (!b) return; e.preventDefault(); audio();
-  keyUp(); downKey = b; b.classList.add("down"); const k = b.dataset.k; mech(true, BIG.has(k));
+  keyUp(); downKey = b; b.classList.add("down"); drawKey(b); const k = b.dataset.k; mech(true, BIG.has(k));
   keyPress(k);
   if (k === "⌫") rep = setTimeout(function again() { if (downKey !== b) return; keyPress("⌫"); mech(true, true); rep = setTimeout(again, 70); }, 450);
 });
@@ -1085,7 +1113,7 @@ function layout() {
     drawDial();
   } else {
     shiftB.style.height = "";
-    requestAnimationFrame(() => { const ph = shiftB.clientHeight; led.style.left = (ph / 2 - 8) + "px"; led.style.bottom = ""; led.style.top = (ph / 2 - 8) + "px"; drawStrip(); renderEd(); });
+    requestAnimationFrame(() => { labelKb(); const ph = shiftB.clientHeight; led.style.left = (ph / 2 - 8) + "px"; led.style.bottom = ""; led.style.top = (ph / 2 - 8) + "px"; drawStrip(); renderEd(); });
   }
   if (mode === "scansione" && SC.frozen) { drawStill(); drawScanOv(); } else if (mode === "foto") drawFotoOv();
   d1();

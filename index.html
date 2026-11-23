@@ -62,12 +62,15 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 
 /* Calendario */
 #cal { padding: var(--space-3); }
-.cal-h { height: 32px; display: flex; align-items: center; }
-.cal-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.cal-g div { height: 40px; display: flex; align-items: center; justify-content: center; border: var(--border-hairline) solid transparent; font-variant-numeric: tabular-nums; }
-.cal-g .has { background: var(--surface-inverse); color: var(--ink-inverse); }
+.cal-h { height: 28px; display: flex; align-items: center; }
+.cal-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-g div { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; padding-bottom: 4px; border: var(--border-hairline) solid transparent; font-variant-numeric: tabular-nums; }
+.cal-g .has::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--ink); }   /* pallino: giorno con contenuti */
 .cal-g .sel { border-color: var(--line); }
-.cal-g .has.sel { outline: var(--border-hairline) solid var(--line); outline-offset: 2px; }
+.cal-n { margin-top: var(--space-3); white-space: pre-wrap; }
+#dirs .dr { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); border: var(--border-hairline) solid transparent; }
+#dirs .dr.sel { border-color: var(--line); }
+.it .hd { display: flex; gap: var(--space-3); align-items: baseline; }
 
 /* Mirino */
 #cam video, #cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -89,7 +92,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #d1 .l1 { position: absolute; inset: 0; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); white-space: nowrap; overflow: hidden; }
 #d1 .l1 span { overflow: hidden; text-overflow: ellipsis; }
 #d1 .l1 #d1v { flex: 1; min-width: 0; }
-#d1c { position: absolute; top: 0; bottom: 0; right: 0; width: 45%; height: 100%; display: none; }
+#d1c { position: absolute; top: 50%; right: var(--space-3); width: 79px; height: 10px; margin-top: -5px; display: none; }   /* VU meter */
 #d1.meter #d1c { display: block; }
 #ed { display: none; position: absolute; inset: 0; padding: 0 var(--space-3); overflow: hidden; white-space: pre; align-items: center; }
 #ed .car { display: inline-block; width: 0; border-left: var(--border-hairline) solid var(--ink); margin-right: -1px; height: 20px; vertical-align: -4px; animation: blink 1s steps(1) infinite; }
@@ -137,6 +140,7 @@ body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }
     <div id="feed" class="pane scroll on"></div>
     <div id="detail" class="pane scroll"></div>
     <div id="cal" class="pane"></div>
+    <div id="dirs" class="pane scroll"></div>
     <div id="cam" class="pane"><video id="vid" playsinline muted autoplay></video><canvas id="still"></canvas><canvas id="ov"></canvas></div>
   </div>
   <div id="bar" class="">
@@ -281,7 +285,7 @@ function mech(down, big) {
 /* ============ Modalità ============ */
 const VIEW = ["consulta", "calendario", "cartelle", "edit", "elimina", "archivio"];
 const CAP = ["registra", "foto", "scansione", "file", "testo"];
-const LABEL = { consulta: "CONSULTA", calendario: "CALENDARIO", cartelle: "CARTELLE", edit: "EDIT", elimina: "ELIMINA", archivio: "ARCHIVIO", registra: "REGISTRA", foto: "FOTO", scansione: "SCANSIONE", file: "FILE", testo: "TESTO" };
+const LABEL = { consulta: "", calendario: "CAL", cartelle: "DIR", edit: "EDIT", elimina: "DEL", archivio: "ARC", registra: "REC", foto: "CAM", scansione: "SCAN", file: "FILE", testo: "TEXT" };
 const M = {};                                         // gestori: enter, leave, dial, sdial, center, shift, d1
 let mode = VIEW.includes(S.mode) || CAP.includes(S.mode) ? S.mode : "consulta";
 function setMode(k) {
@@ -301,7 +305,7 @@ function showPane(id) { for (const p of document.querySelectorAll(".pane")) p.cl
 let msg = "", msgT = 0;
 function flash(t) { msg = t; clearTimeout(msgT); msgT = setTimeout(() => { msg = ""; d1(); }, 1600); d1(); }
 function d1() {
-  $("d1m").textContent = LABEL[mode];
+  $("d1m").textContent = LABEL[mode]; $("d1m").style.display = LABEL[mode] ? "" : "none";
   $("d1v").textContent = msg || (M[mode].d1 ? M[mode].d1() : "");
   $("d1").classList.toggle("meter", !!rec && !msg);
 }
@@ -339,15 +343,17 @@ function filteredUrl(it, k) {
   return fcache.get(key);
 }
 function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
-function drawWave(cv, peaks, prog) {
+function drawWave(cv, peaks, prog) {          // forma d'onda: contorno 1px; la parte già ascoltata è piena
   const w = cv.clientWidth || 300, h = cv.clientHeight || 34; cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
-  const c = cv.getContext("2d"), col = ink(); c.fillStyle = col; c.strokeStyle = col; c.lineWidth = DPR;
-  const n = peaks && peaks.length ? peaks.length : 0, bw = cv.width / Math.max(n, 1);
-  for (let i = 0; i < n; i++) {
-    const bh = Math.max(0.06, peaks[i]) * cv.height, x = Math.round(i * bw + bw * 0.2), bwi = Math.max(2, Math.round(bw * 0.6)), y = Math.round((cv.height - bh) / 2);
-    if (prog != null && i / n > prog) c.strokeRect(x + DPR / 2, y + DPR / 2, bwi - DPR, Math.max(DPR, bh - DPR)); else c.fillRect(x, y, bwi, bh);
-  }
-  if (!n) c.fillRect(0, Math.round(cv.height / 2), cv.width, DPR);
+  const c = cv.getContext("2d"), col = ink(), W = cv.width, H = cv.height, mid = H / 2; c.fillStyle = col; c.strokeStyle = col; c.lineWidth = DPR;
+  const n = peaks && peaks.length ? peaks.length : 0;
+  if (n < 2) { c.fillRect(0, Math.round(mid), W, DPR); return; }
+  const X = (i) => DPR / 2 + (i / (n - 1)) * (W - DPR), A = (i) => Math.max(DPR, peaks[i] * (H / 2 - DPR));
+  c.beginPath(); c.moveTo(X(0), mid - A(0));
+  for (let i = 1; i < n; i++) c.lineTo(X(i), mid - A(i));
+  for (let i = n - 1; i >= 0; i--) c.lineTo(X(i), mid + A(i));
+  c.closePath(); c.stroke();
+  if (prog) { c.save(); c.beginPath(); c.rect(0, 0, W * prog, H); c.clip(); c.beginPath(); c.moveTo(X(0), mid - A(0)); for (let i = 1; i < n; i++) c.lineTo(X(i), mid - A(i)); for (let i = n - 1; i >= 0; i--) c.lineTo(X(i), mid + A(i)); c.closePath(); c.fill(); c.restore(); }
 }
 function partEl(it, k, full) {
   const p = parts(it)[k], d = document.createElement("div"); d.className = "part";
@@ -370,7 +376,9 @@ function renderFeed() {
   sel = Math.max(0, Math.min(L.length - 1, sel));
   L.forEach((it, i) => {
     const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : "") + (i && L[i - 1].name.slice(0, 6) === it.name.slice(0, 6) ? " same" : ""); el.dataset.i = i;
-    const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = it.name; el.appendChild(nm);
+    const hd = document.createElement("div"); hd.className = "hd"; el.appendChild(hd);
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = it.name; hd.appendChild(nm);
+    const fd = document.createElement("span"); fd.className = "fd"; fd.textContent = it.folder || ""; hd.appendChild(fd);
     parts(it).forEach((_, k) => el.appendChild(partEl(it, k)));
     feed.appendChild(el);
   });
@@ -425,7 +433,7 @@ function detailDial(dir) {
 M.consulta = {
   leave() { if (inDetail) closeDetail(); },
   dial(d) { return inDetail ? detailDial(d) : setSel(sel + d); },
-  sdial(d) { return inDetail ? detailDial(d * 5) : jumpDay(d); },
+  sdial(d) { return inDetail ? detailDial(d * 5) : assignFolder(d); },   // Shift + ghiera: cambia cartella della nota
   center() { inDetail ? closeDetail() : openDetail(); },
   shift() { inDetail ? closeDetail() : openDetail(); },
   d1() { const it = cur(); return it ? it.name : ""; },
@@ -441,7 +449,10 @@ function renderCal() {
   let h = '<div class="cal-h">' + MESI[m] + " " + y + '</div><div class="cal-g">' + ["L", "M", "M", "G", "V", "S", "D"].map((x) => "<div>" + x + "</div>").join("");
   for (let i = 0; i < off; i++) h += "<div></div>";
   for (let d = 1; d <= n; d++) { const k = ymd(new Date(y, m, d)); h += '<div data-d="' + d + '" class="' + (has.has(k) ? "has" : "") + (d === calDay.getDate() ? " sel" : "") + '">' + d + "</div>"; }
-  $("cal").innerHTML = h + "</div>";
+  const k = ymd(calDay), cnt = {}, NAMES = { text: "testo", audio: "audio", image: "immagini", pdf: "pdf", file: "file" };
+  for (const it of items) if (it.name.startsWith(k)) for (const p of parts(it)) cnt[p.type] = (cnt[p.type] || 0) + 1;
+  const sum = Object.keys(NAMES).filter((t) => cnt[t]).map((t) => NAMES[t] + " " + cnt[t]).join("   ");
+  $("cal").innerHTML = h + '</div><div class="cal-n">' + sum + "</div>";
 }
 $("cal").addEventListener("click", (e) => { const c = e.target.closest("[data-d]"); if (!c) return; audio(); const d = +c.dataset.d; if (d === calDay.getDate()) M.calendario.shift(); else { calDay = new Date(calDay.getFullYear(), calDay.getMonth(), d); renderCal(); d1(); sound("browse"); } });
 M.calendario = {
@@ -457,23 +468,33 @@ M.calendario = {
   d1() { const n = dayCount(calDay); return pad(calDay.getDate()) + "." + pad(calDay.getMonth() + 1) + "." + pad(calDay.getFullYear() % 100) + (n ? "  " + n : ""); },
 };
 
-/* ---- CARTELLE ---- */
+/* ---- CARTELLE: elenco, apertura, nuova e rinomina (ruotando il telefono) ---- */
+function assignFolder(d) {
+  const it = cur(); if (!it) return false;
+  const L = [""].concat(S.folders), i = Math.max(0, L.indexOf(it.folder || ""));
+  it.folder = L[(i + d + L.length) % L.length] || undefined; dbPut(it);
+  const el = feed.children[sel]; if (el) el.querySelector(".fd").textContent = it.folder || ""; d1(); return true;
+}
+let dirSel = 0, dirOpen = null;
+const dirRows = () => S.folders.concat(["+"]);
+function renderDirs() {
+  const R = dirRows(); dirSel = Math.max(0, Math.min(R.length - 1, dirSel));
+  $("dirs").innerHTML = R.map((f, i) => '<div class="dr' + (i === dirSel ? " sel" : "") + '" data-i="' + i + '"><span>' + (f === "+" ? "+ nuova" : esc(f)) + "</span><span>" + (f === "+" ? "" : items.filter((x) => x.folder === f).length) + "</span></div>").join("");
+  const el = $("dirs").children[dirSel]; if (el) el.scrollIntoView({ block: "nearest" });
+}
+$("dirs").addEventListener("click", (e) => { const r = e.target.closest(".dr"); if (!r) return; audio(); const i = +r.dataset.i; if (i === dirSel) M.cartelle.shift(); else { dirSel = i; renderDirs(); d1(); sound("browse"); } });
 M.cartelle = {
-  enter() { renderFeed(); },
-  leave() { if (S.filter) { S.filter = null; saveS(); renderFeedKeep(); } },
-  dial(d) { return setSel(sel + d); },
-  sdial(d) { return this.assign(d); },
-  assign(d) {
-    const it = cur(); if (!it) return false;
-    const L = [""].concat(S.folders), i = Math.max(0, L.indexOf(it.folder || ""));
-    it.folder = L[(i + d + L.length) % L.length] || undefined; dbPut(it); d1(); return true;
+  enter() { dirOpen = null; S.filter = null; showPane("dirs"); renderDirs(); },
+  leave() { dirOpen = null; S.filter = null; renderFeedKeep(); },
+  dial(d) { if (dirOpen) return setSel(sel + d); const n = dirRows().length, j = dirSel + d; if (j < 0 || j >= n) return false; dirSel = j; renderDirs(); return true; },
+  sdial(d) { return dirOpen ? assignFolder(d) : this.dial(d); },
+  shift() {
+    if (dirOpen) { this.center(); return; }
+    const f = dirRows()[dirSel]; if (f === "+") { flash("Ruota il telefono"); sound("set"); return; }
+    dirOpen = f; S.filter = f; sel = 0; showPane("feed"); renderFeed(); sound("set");
   },
-  shift() { if (this.assign(1)) sound("set"); },
-  center() {                                  // filtro: mostra solo la cartella della voce scelta
-    const it = cur(); if (S.filter) S.filter = null; else if (it && it.folder) S.filter = it.folder; else { sound("stop"); return; }
-    const keep = it; renderFeed(); setSel(Math.max(0, vis().indexOf(keep)), true); sound("set");
-  },
-  d1() { const it = cur(); return it ? it.name + "  " + (it.folder || "—") + (S.filter ? "  ▾" : "") : ""; },
+  center() { if (dirOpen) { dirOpen = null; S.filter = null; showPane("dirs"); renderDirs(); renderFeed(); sound("menu"); d1(); } else this.shift(); },
+  d1() { if (dirOpen) { const it = cur(); return dirOpen + (it ? "  " + it.name : ""); } const f = dirRows()[dirSel]; return f === "+" ? "nuova" : f; },
 };
 function renderFeedKeep() { const it = cur(); renderFeed(); if (it) setSel(Math.max(0, vis().indexOf(it)), true); }
 
@@ -568,7 +589,7 @@ async function peaksOf(blob) {
   try {
     const a = audio(); if (!a) return null;
     const buf = await new Promise((res, rej) => blob.arrayBuffer().then((ab) => a.decodeAudioData(ab, res, rej)));
-    const d = buf.getChannelData(0), n = 64, st = Math.max(1, Math.floor(d.length / n)), out = [];
+    const d = buf.getChannelData(0), n = 160, st = Math.max(1, Math.floor(d.length / n)), out = [];
     for (let i = 0; i < n; i++) { let m = 0; for (let j = i * st; j < (i + 1) * st && j < d.length; j += 16) m = Math.max(m, Math.abs(d[j])); out.push(m); }
     const mx = Math.max(...out, 0.01); return { peaks: out.map((v) => +(v / mx).toFixed(2)), dur: buf.duration };
   } catch (e) { return null; }
@@ -597,7 +618,7 @@ function recStop() {
     let peaks = null, dur = (performance.now() - r.t0) / 1000;
     const dec = await peaksOf(blob);                     // la waveform si ricava dal file: affidabile anche su iPhone
     if (dec && dec.dur) { peaks = dec.peaks; dur = dec.dur; }
-    else if (r.peaks.length) { const n = 64, out = []; for (let i = 0; i < n; i++) { const s = r.peaks.slice(Math.floor((i * r.peaks.length) / n), Math.floor(((i + 1) * r.peaks.length) / n) || 1); out.push(s.length ? Math.max(...s) : 0); } const mx = Math.max(...out, 0.01); peaks = out.map((v) => +(v / mx).toFixed(2)); }
+    else if (r.peaks.length) { const n = 160, out = []; for (let i = 0; i < n; i++) { const s = r.peaks.slice(Math.floor((i * r.peaks.length) / n), Math.floor(((i + 1) * r.peaks.length) / n) || 1); out.push(s.length ? Math.max(...s) : 0); } const mx = Math.max(...out, 0.01); peaks = out.map((v) => +(v / mx).toFixed(2)); }
     const part = { type: "audio", ext: r.mime === "audio/mp4" ? "m4a" : "webm", mime: r.mime, blob, dur, peaks };
     if (r.target) await attach(r.target, part); else await addItem(Object.assign({ name: r.name }, part));
   };
@@ -608,12 +629,14 @@ function meter() {
   if (!rec) { d1(); return; }
   const r = rec; r.an.getFloatTimeDomainData(r.buf); let m = 0; for (const v of r.buf) m = Math.max(m, Math.abs(v));
   r.peaks.push(m);
+  let sq = 0; for (const v of r.buf) sq += v * v;
+  const db = 20 * Math.log10(Math.sqrt(sq / r.buf.length) + 1e-6), lv = Math.max(0, Math.min(1, (db + 54) / 48));
+  r.lv = Math.max(lv, (r.lv || 0) * 0.9);         // discesa lenta come un VU
   const w = d1c.clientWidth, h = d1c.clientHeight;
   if (w) {
     if (d1c.width !== Math.round(w * DPR)) { d1c.width = Math.round(w * DPR); d1c.height = Math.round(h * DPR); }
-    const c = d1c.getContext("2d"); c.clearRect(0, 0, d1c.width, d1c.height); c.fillStyle = ink();
-    const bw = 3 * DPR, n = Math.floor((d1c.width - 12 * DPR) / bw), tail = r.peaks.slice(-n);
-    tail.forEach((v, i) => { const bh = Math.max(DPR, Math.min(1, v * 2) * d1c.height * 0.6); c.fillRect(i * bw, Math.round((d1c.height - bh) / 2), bw - DPR, bh); });
+    const c = d1c.getContext("2d"), N = 16, sw = 4 * DPR, gp = Math.round(DPR); c.clearRect(0, 0, d1c.width, d1c.height); c.fillStyle = ink(); c.strokeStyle = ink(); c.lineWidth = DPR;
+    for (let i = 0; i < N; i++) { const x = i * (sw + gp); if (i < Math.round(r.lv * N)) c.fillRect(x, 0, sw, d1c.height); else c.strokeRect(x + DPR / 2, DPR / 2, sw - DPR, d1c.height - DPR); }
   }
   if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); }
   requestAnimationFrame(meter);
@@ -959,16 +982,24 @@ function moveCaret(dir, word, select) {
 }
 async function saveDraft() {
   const txt = draft.text;
+  if (editTarget && "dir" in editTarget) {     // CARTELLE: nuova, rinomina, o elimina se il nome è vuoto
+    const old = editTarget.dir, nw = txt.trim().toLowerCase();
+    if (!old) { if (!nw) { sound("stop"); return; } if (!S.folders.includes(nw)) S.folders.push(nw); editTarget.dir = nw; dirSel = S.folders.indexOf(nw); flash("Cartella " + nw); }
+    else {
+      const i = S.folders.indexOf(old); if (nw && S.folders.includes(nw) && nw !== old) { sound("stop"); flash("Esiste già"); return; }
+      if (nw) S.folders[i] = nw; else S.folders.splice(i, 1);
+      for (const it of items) if (it.folder === old) { it.folder = nw || undefined; await dbPut(it); }
+      editTarget.dir = nw || null; flash(nw ? "Rinominata " + nw : "Eliminata " + old);
+    }
+    saveS(); renderDirs(); renderFeed(); sound("act"); return;
+  }
   if (editTarget) {                            // EDIT: aggiorna il testo della voce
     const it = editTarget, p = parts(it).find((x) => x.type === "text");
     if (p) p.text = txt; else if (txt.trim()) (it.att = it.att || []).push({ type: "text", ext: "txt", mime: "text/plain", text: txt });
     await dbPut(it); renderFeed(); sound("act"); flash("Aggiornato " + it.name); return;
   }
   if (!txt.trim()) { sound("stop"); return; }
-  if (mode === "cartelle") {                   // in CARTELLE il testo scritto diventa una nuova cartella
-    const f = txt.trim().toLowerCase(); if (!S.folders.includes(f)) S.folders.push(f); saveS();
-    flash("Cartella " + f); sound("act");
-  } else await addItem({ type: "text", ext: "txt", mime: "text/plain", text: txt });
+  await addItem({ type: "text", ext: "txt", mime: "text/plain", text: txt });
   draft.text = ""; draft.caret = 0; draft.anchor = null; caps = 1; labelKb(); renderEd();
 }
 
@@ -1095,6 +1126,7 @@ function layout() {
     if (land) {
       if (inDetail) closeDetail();
       if (mode === "edit") { const it = cur(); editTarget = it || null; const p = it && parts(it).find((x) => x.type === "text"); draft.text = p ? p.text : ""; }
+      else if (mode === "cartelle" && !dirOpen) { const f = dirRows()[dirSel]; editTarget = { dir: f === "+" ? null : f }; draft.text = f === "+" ? "" : f; }
       else if (editTarget) { editTarget = null; draft.text = store.get("jrn1-draft", ""); }
       draft.caret = draft.text.length; draft.anchor = null; kbPage = "abc"; caps = autoCaps() ? 1 : 0; renderKb(); renderEd();
     } else if (editTarget) { editTarget = null; draft.text = store.get("jrn1-draft", ""); draft.caret = draft.text.length; }

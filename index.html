@@ -73,7 +73,13 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .part.au canvas.wf { flex: 1; min-width: 0; width: auto; }
 .part.au .fl { flex: none; font-variant-numeric: tabular-nums; }
 #detail .part + .part { margin-top: var(--space-3); }
-#detail .part.ro { outline: var(--border-hairline) solid var(--line); outline-offset: 3px; }   /* ordine pagine: pagina scelta */
+#detail .rog { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2) var(--space-3); }   /* ordine pagine: griglia 3×3 */
+#detail .rog .pg { min-width: 0; }
+#detail .rog .th { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#detail .rog .th img { width: 100%; height: 100%; object-fit: contain; }
+#detail .rog .n { text-align: center; margin-top: 4px; font-variant-numeric: tabular-nums; }
+#detail .rog .pg.ro .n { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+#detail .rog .pg.ro .th { outline: var(--border-hairline) solid var(--line); outline-offset: 2px; }
 #detail iframe { width: 100%; height: 70vh; border: 0; background: #fff; }
 
 /* Calendario */
@@ -106,6 +112,10 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #arrows button { height: 100%; width: var(--bh, 44px); flex: none; display: flex; align-items: center; justify-content: center; }
 #arrows button + button { border-left: var(--border-hairline) solid var(--line); }
 #arrows button.down { background: var(--surface-inverse); color: var(--ink-inverse); }
+#arrows { background: #000; color: #fff; }   /* le frecce seguono il Display 1: sempre nere */
+#arrows button + button, #arrows.box, #d1.box { border-left-color: #fff; }
+#d1.box { border-left-color: var(--line); border-right-color: #fff; }
+#arrows button.down { background: #fff; color: #000; }
 #arrows svg { width: 12px; height: 12px; fill: currentColor; }
 #d1 { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 #arrows { order: 2; margin-left: -1px; }
@@ -136,6 +146,10 @@ body.bmp #ed .car { display: none; }
 #dial { display: block; touch-action: none; }
 #strip { display: none; touch-action: none; }
 #kb { display: none; }
+#mbtn { display: flex; flex-direction: column; gap: var(--space-4); }   /* tasti dedicati: folder (sopra) e mod (sotto) */
+.rb { width: 44px; height: 44px; border-radius: 50%; border: var(--border-hairline) solid var(--line); touch-action: none; }
+.rb.down { background: var(--surface-inverse); }
+body.land #mbtn { display: none; }
 
 /* --- Orizzontale: Display 1 ridotto (0,7) + 4 file di tastiera + Shift e striscia --- */
 body.land #app { max-width: none; display: grid; grid-template-rows: .7fr 1fr 1fr 1fr 1fr 1fr; grid-template-columns: minmax(0, 1fr); row-gap: 6px;
@@ -203,6 +217,7 @@ body.land #ctl { gap: 70px; }
   <div id="kb"></div>
   <div id="ctl">
     <button id="shift" class="box" aria-label="Shift"><i class="led" id="led"></i></button>
+    <div id="mbtn"><button id="bfold" class="rb" aria-label="Cartelle e calendario"></button><button id="bmod" class="rb" aria-label="Modalità"></button></div>
     <canvas id="dial" aria-label="Ghiera"></canvas>
     <canvas id="strip" class="box" aria-label="Striscia di scorrimento"></canvas>
   </div>
@@ -335,7 +350,7 @@ function mech(down, big) {
 /* ============ Modalità ============ */
 const VIEW = ["consulta", "cartelle", "calendario", "archivio", "elimina", "edit"];
 const CAP = ["registra", "foto", "scansione", "file", "testo"];
-const LABEL = { consulta: "", calendario: "CAL", cartelle: "DIR", edit: "EDIT", elimina: "DEL", archivio: "ARC", registra: "REC", foto: "CAM", scansione: "SCAN", file: "FILE", testo: "TEXT" };
+const LABEL = { consulta: "", calendario: "CAL", cartelle: "DIR", edit: "EDIT", elimina: "DEL", archivio: "SET", registra: "REC", foto: "CAM", scansione: "SCAN", file: "FILE", testo: "TEXT" };
 const M = {};                                         // gestori: enter, leave, dial, sdial, center, shift, d1
 let mode = VIEW.includes(S.mode) || CAP.includes(S.mode) ? S.mode : "consulta";
 function setMode(k) {
@@ -346,10 +361,14 @@ function setMode(k) {
   if (qf && (was === "consulta" || k === "consulta")) { renderFeed(); setSel(Math.max(0, vis().indexOf(keep)), true); }
   showPane("feed"); M[k].enter && M[k].enter(); d1();
 }
-function cycle(dir, cap) {
-  const g = cap ? CAP : VIEW, i = g.indexOf(mode);
-  setMode(i < 0 ? (cap ? S.lastCap : "consulta") : g[(i + dir + g.length) % g.length]); sound("menu");
+function cycle(dir) {                              // frecce: scorrono le modalità del gruppo corrente (in base: consulta e cattura)
+  const g = groupOf(mode), i = g.indexOf(mode);
+  setMode(g[(i + dir + g.length) % g.length]); sound("menu");
 }
+/* Tasti dedicati: folder cicla cartelle → calendario → base, mod cicla edit → elimina → impostazioni → base */
+const FOLD = ["cartelle", "calendario"], MODS = ["edit", "elimina", "archivio"];
+function ringMode(list) { const i = list.indexOf(mode); setMode(i < 0 ? list[0] : i + 1 < list.length ? list[i + 1] : "consulta"); sound("menu"); d1(); }
+function groupOf(m) { return FOLD.includes(m) ? FOLD : MODS.includes(m) ? MODS : ["consulta"].concat(CAP); }
 function showPane(id) { for (const p of document.querySelectorAll(".pane")) p.classList.toggle("on", p.id === id); }
 
 /* Display 1: nome della modalità + contenuto */
@@ -369,11 +388,20 @@ function arrowBtn(el, dir) {
     e.preventDefault(); audio(); el.classList.add("down");
     if (land) { moveCaret(dir, true, shiftHeld()); if (shiftHeld()) shUsed = true; sound("browse"); return; }
     if (shiftHeld()) shUsed = true;
-    cycle(dir, shiftHeld());
+    cycle(dir);
   });
   ["pointerup", "pointercancel", "pointerleave"].forEach((t) => el.addEventListener(t, () => el.classList.remove("down")));
 }
 arrowBtn($("prev"), -1); arrowBtn($("next"), 1);
+function roundBtn(el, tap, hold) {
+  let t = 0, held = false;
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); audio(); el.classList.add("down"); sound("set"); held = false; clearTimeout(t); if (hold) t = setTimeout(() => { held = true; sound("act"); }, 650); });
+  el.addEventListener("pointerup", () => { el.classList.remove("down"); clearTimeout(t); if (held && hold) hold(); else tap(); });   // al rilascio: vale come gesto per la condivisione
+  ["pointercancel", "pointerleave"].forEach((x) => el.addEventListener(x, () => { el.classList.remove("down"); clearTimeout(t); }));
+}
+roundBtn($("bfold"), () => ringMode(FOLD));
+roundBtn($("bmod"), () => ringMode(MODS), () => exportAll());
+async function exportAll() { if (rec) return; S.lastExp = Date.now(); saveS(); await exportZip(items, "JRN-1_tutto_" + ymd(new Date()) + ".zip"); }
 $("theme").addEventListener("click", () => { audio(); S.theme = S.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = S.theme; saveS(); drawDial(); drawStrip(); renderFeed(); if (mode === "calendario") renderCal(); sound("set"); });
 
 /* ============ Feed ============ */
@@ -435,7 +463,7 @@ function partEl(it, k, full) {
   return d;
 }
 function renderFeed() {
-  feed.innerHTML = ""; const L = vis();
+  archStats(); feed.innerHTML = ""; const L = vis();
   sel = Math.max(0, Math.min(L.length - 1, sel));
   L.forEach((it, i) => {
     const el = document.createElement("div"); el.className = "it" + (i === sel ? " sel" : "") + (i && L[i - 1].name.slice(0, 6) === it.name.slice(0, 6) ? " same" : ""); el.dataset.i = i;
@@ -569,9 +597,24 @@ function detailScroll(px) { const dt = $("detail"), o = dt.scrollTop; dt.scrollT
 function detailDial(dir) { return detailScroll(dir * 44); }
 
 /* ---- CONSULTA ---- */
+/* Stato dell'archivio per il Display 1 in base */
+const ST = { size: 0, warn: [], persisted: true, near: false };
+function archStats() {
+  let n = 0; for (const it of items) for (const p of parts(it)) n += p.blob ? p.blob.size : p.text ? new Blob([p.text]).size : 0;
+  ST.size = n; const w = [];
+  const days = S.lastExp ? Math.floor((Date.now() - S.lastExp) / 864e5) : null;
+  if (items.length && days === null) w.push("archivio mai esportato"); else if (days !== null && days >= 30) w.push("ultimo export " + days + " giorni fa");
+  if (ST.near) w.push("memoria quasi piena"); if (!ST.persisted) w.push("memoria non protetta");
+  ST.warn = w;
+}
+async function storageCheck() {
+  try { if (navigator.storage && navigator.storage.persisted) ST.persisted = await navigator.storage.persisted(); if (navigator.storage && navigator.storage.estimate) { const e = await navigator.storage.estimate(); ST.near = e.quota ? e.usage / e.quota > 0.8 : false; } } catch (e) {}
+  archStats(); d1();
+}
 let evEdit = null;                                    // nota di una cartella calendar: data dell'evento in modifica
 const pre = () => (qf ? qf + "  " : "");
 M.consulta = {
+  lab() { const d = new Date(); return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + pad(d.getFullYear() % 100); },   // data di oggi, fissa
   leave() { if (inDetail) closeDetail(); evEdit = null; },
   scroll(px) {                                 // ghiera: scorrimento continuo; con l'audio in riproduzione trascina il nastro
     if (evEdit) return null;
@@ -605,7 +648,9 @@ M.consulta = {
   },
   d1() {
     if (evEdit) return "evento " + fmtWhen(evEdit.t);
-    const it = cur(); return (qf || "") + (it && ftype(it) === "tasklist" && it.done ? (qf ? "  " : "") + "fatto" : "");
+    const it = cur(), a = [];                     // base: in scorrimento filtro, peso dell'archivio, note, avvisi
+    if (qf) a.push(qf); if (it && ftype(it) === "tasklist" && it.done) a.push("fatto");
+    a.push(fmtSize(ST.size), items.length + (items.length === 1 ? " nota" : " note")); return a.concat(ST.warn).join("  ");
   },
 };
 
@@ -705,10 +750,18 @@ async function setParts(it, list) {               // riscrive le parti di una no
   await dbPut(it);
 }
 let RO = null;                                     // ordine pagine: { it, k }
-function renderRO() {
-  const dt = $("detail"), it = RO.it; dt.innerHTML = ""; showPane("detail");
-  parts(it).forEach((_, k) => { const pe = partEl(it, k, true) || document.createElement("div"); pe.classList.add("part"); if (k === RO.k) pe.classList.add("ro"); dt.appendChild(pe); });
-  const el = dt.querySelector(".ro"); if (el) el.scrollIntoView({ block: "nearest" }); d1();
+function renderRO() {                            // anteprime 3×3: 9 pagine alla volta, numero sotto ognuna
+  const dt = $("detail"), it = RO.it, P = parts(it), from = Math.floor(RO.k / 9) * 9; dt.innerHTML = ""; dt.scrollTop = 0; showPane("detail");
+  const g = document.createElement("div"); g.className = "rog"; dt.appendChild(g);
+  for (let k = from; k < Math.min(P.length, from + 9); k++) {
+    const p = P[k], pg = document.createElement("div"); pg.className = "pg" + (k === RO.k ? " ro" : "");
+    const th = document.createElement("div"); th.className = "th"; pg.appendChild(th);
+    if (p.type === "image") { const im = new Image(); im.alt = ""; th.appendChild(im); if (p.filter && p.filter !== "originale") { if (p.filter !== "migliorato") im.classList.add("inv"); filteredUrl(it, k).then((u) => (im.src = u)).catch(() => (im.src = urlOf(it, k))); } else im.src = urlOf(it, k); }
+    else th.textContent = p.type === "text" ? "testo" : p.type;
+    const n = document.createElement("div"); n.className = "n"; n.textContent = k + 1; pg.appendChild(n);
+    g.appendChild(pg);
+  }
+  d1();
 }
 let editAct = 0, confirmDel = false, editTarget = null;
 M.edit = {
@@ -782,7 +835,7 @@ M.archivio = {
     arcConfirm = false;
     if (r.k.startsWith("exp")) {
       const pre = r.k === "expA" ? "" : (it ? it.name : ymd(new Date())).slice(0, r.k === "expM" ? 4 : 2);
-      sound("act"); await exportZip(items.filter((x) => x.name.startsWith(pre)), "JRN-1_" + (pre || "tutto") + ".zip");
+      sound("act"); if (!pre) { S.lastExp = Date.now(); saveS(); } await exportZip(items.filter((x) => x.name.startsWith(pre)), "JRN-1_" + (pre || "tutto") + ".zip");
     } else if (r.k === "imp") { sound("set"); $("fzip").click(); }
     else if (r.k === "sound") { S.sound = S.sound === "1" ? "0" : "1"; saveS(); if (S.sound === "1") { audio(); sound("set"); } }
     else if (r.k === "clear") { await dbClear(); items = []; sel = 0; renderFeed(); flash("Archivio vuoto"); sound("act"); }
@@ -1447,7 +1500,7 @@ function drawD1() {
     if (Math.floor(performance.now() / 530) % 2 === 0) { c.fillStyle = inkC; c.fillRect((X0 + cx) * u, top * u, Math.max(1, Math.round(DPR)), BM.NR * u); }
     c.restore(); BM.mqT = setTimeout(drawD1, 530); return;
   }
-  const lab = LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, "  "), tm = $("d1t").textContent;
+  const lab = msg ? LABEL[mode] : M[mode].lab ? M[mode].lab() : LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, "  "), tm = $("d1t").textContent;
   let X = pad; if (lab) X = pxDraw(lab, X, top, inkC) + 6;
   const end = cols - pad;
   if (rec && !msg) {                              // REC: VU a barre da 1px, poi il tempo
@@ -1505,7 +1558,7 @@ window.addEventListener("orientationchange", () => setTimeout(layout, 250));
 if (window.visualViewport) visualViewport.addEventListener("resize", () => setTimeout(layout, 60));
 document.addEventListener("keydown", (e) => {     // anteprima sul Mac
   if (land) { if (e.key.length === 1) keyPress(e.key); else if (e.key === "Backspace") keyPress("⌫"); else if (e.key === "Enter") keyPress("⏎"); else if (e.key === "ArrowLeft") moveCaret(-1, false, e.shiftKey); else if (e.key === "ArrowRight") moveCaret(1, false, e.shiftKey); return; }
-  if (e.key === "ArrowDown") step(1); else if (e.key === "ArrowUp") step(-1); else if (e.key === "ArrowRight") cycle(1, e.shiftKey); else if (e.key === "ArrowLeft") cycle(-1, e.shiftKey);
+  if (e.key === "ArrowDown") step(1); else if (e.key === "ArrowUp") step(-1); else if (e.key === "ArrowRight") cycle(1); else if (e.key === "ArrowLeft") cycle(-1);
   else if (e.key === "Enter") M[mode].shift && M[mode].shift(); else if (e.key === " ") M[mode].center && M[mode].center();
 });
 
@@ -1530,7 +1583,7 @@ bmInit();
   catch (e) { flash("Memoria non disponibile"); }
   sortItems(); S.filter = null; layout(); renderFeed();
   const m = mode; mode = "consulta"; if (m !== "consulta" && m !== "foto" && m !== "scansione") setMode(m); else d1();
-  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}).finally(storageCheck); else storageCheck();
 })();
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost"))
   navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});

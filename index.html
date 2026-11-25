@@ -196,6 +196,29 @@ body.land #app { grid-template-rows: 0.75fr 1fr 1fr 1fr 1fr 1fr; row-gap: 14px; 
 .k.w15 { flex-grow: 1; }
 body.land #shift { width: 119px; }
 body.land #ctl { gap: 70px; }
+
+/* ===== Desktop (v21): Display 2 grande, D1 + frecce + Shift + folder + mod + ghiera in una sola barra ===== */
+body.desk #app { max-width: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) 44px 30px; column-gap: 16px; row-gap: 16px; padding: 24px 24px 0; }
+body.desk #d2 { grid-column: 1 / 3; grid-row: 1; margin: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+body.desk.sdir #d2, body.desk.scal #d2 { grid-template-columns: minmax(0, 1fr) 325px; }
+body.desk #d2 > .pane { position: relative; inset: auto; min-height: 0; }
+body.desk #d2 > .pane.on { grid-column: 1; grid-row: 1 / 3; }
+body.desk #cal, body.desk #dirs { display: none; grid-column: 2; border-left: 1px solid var(--line); margin-left: 24px; padding: 0 0 0 24px; }
+body.desk #cal { grid-row: 1; padding-bottom: 32px; }
+body.desk #dirs { grid-row: 2; }
+body.desk.sdir:not(.scal) #dirs { grid-row: 1 / 3; }
+body.desk.scal:not(.sdir) #cal { grid-row: 1 / 3; }
+body.desk.sdir #dirs, body.desk.scal #cal { display: block; }
+body.desk #dirs .dr { padding: 0; }
+body.desk #bar { grid-column: 1; grid-row: 2; height: 44px; margin: 0; }
+body.desk #ctl { grid-column: 2; grid-row: 2; padding: 0; gap: 16px; justify-content: flex-end; }
+body.desk #shift { width: 120px; height: 44px; }
+body.desk #mbtn { flex-direction: row; gap: 16px; align-self: center; }
+body.desk .top { grid-column: 1 / 3; grid-row: 3; padding: 0; }
+body.desk .it img.scan { width: auto; max-width: 100%; max-height: 70vh; }
+body.desk .it .imgs img { height: 220px; }
+body.desk .it .tx { max-width: 760px; }
+body.desk #detail img { width: auto; max-width: 100%; max-height: 80vh; }
 </style>
 </head>
 <body>
@@ -360,7 +383,7 @@ function setMode(k) {
   const old = M[mode], was = mode, keep = cur(); if (old && old.leave) old.leave();
   mode = k; S.mode = k; if (CAP.includes(k)) S.lastCap = k; saveS();
   if (qf && (was === "consulta" || k === "consulta")) { renderFeed(); setSel(Math.max(0, vis().indexOf(keep)), true); }
-  showPane("feed"); M[k].enter && M[k].enter(); d1();
+  showPane("feed"); M[k].enter && M[k].enter(); if (desk) applySide(); d1();
 }
 function cycle(dir) {                              // frecce: scorrono le modalità del gruppo corrente (in base: consulta e cattura)
   const g = groupOf(mode), i = g.indexOf(mode);
@@ -370,7 +393,7 @@ function cycle(dir) {                              // frecce: scorrono le modali
 const FOLD = ["cartelle", "calendario"], MODS = ["edit", "elimina", "archivio"];
 function ringMode(list) { const i = list.indexOf(mode); setMode(i < 0 ? list[0] : i + 1 < list.length ? list[i + 1] : "consulta"); sound("menu"); d1(); }
 function groupOf(m) { return FOLD.includes(m) ? FOLD : MODS.includes(m) ? MODS : ["consulta"].concat(CAP); }
-function showPane(id) { for (const p of document.querySelectorAll(".pane")) p.classList.toggle("on", p.id === id); }
+function showPane(id) { if (desk && (id === "cal" || id === "dirs")) id = "feed"; for (const p of document.querySelectorAll(".pane")) p.classList.toggle("on", p.id === id); }
 
 /* Display 1: nome della modalità + contenuto */
 let msg = "", msgT = 0;
@@ -387,7 +410,7 @@ const clock = (s) => Math.floor(s / 60) + ":" + pad(Math.floor(s % 60));
 function arrowBtn(el, dir) {
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault(); audio(); el.classList.add("down");
-    if (land) { moveCaret(dir, true, shiftHeld()); if (shiftHeld()) shUsed = true; sound("browse"); return; }
+    if (edOn()) { moveCaret(dir, true, shiftHeld()); if (shiftHeld()) shUsed = true; sound("browse"); return; }
     if (shiftHeld()) shUsed = true;
     cycle(dir);
   });
@@ -400,7 +423,7 @@ function roundBtn(el, tap, hold) {
   el.addEventListener("pointerup", () => { el.classList.remove("down"); clearTimeout(t); if (held && hold) hold(); else tap(); });   // al rilascio: vale come gesto per la condivisione
   ["pointercancel", "pointerleave"].forEach((x) => el.addEventListener(x, () => { el.classList.remove("down"); clearTimeout(t); }));
 }
-roundBtn($("bfold"), () => ringMode(FOLD));
+roundBtn($("bfold"), () => (desk ? deskFold() : ringMode(FOLD)));
 roundBtn($("bmod"), () => ringMode(MODS), () => exportAll());
 async function exportAll() { if (rec) return; S.lastExp = Date.now(); saveS(); await exportZip(items, "JRN-1_tutto_" + ymd(new Date()) + ".zip"); }
 $("theme").addEventListener("click", () => { audio(); S.theme = S.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = S.theme; saveS(); drawDial(); drawStrip(); renderFeed(); if (mode === "calendario") renderCal(); sound("set"); });
@@ -1162,7 +1185,8 @@ M.file = {
 M.testo = {
   dial(d) { return setSel(sel + d); }, sdial(d) { return jumpDay(d); },
   center() {}, shift() { if (draft.text.trim()) saveDraft(); else { flash("Ruota il telefono"); sound("stop"); } },
-  d1() { return "ruota il telefono"; },
+  enter() { if (desk) { draft.caret = draft.text.length; draft.anchor = null; } },
+  d1() { return desk ? "" : "ruota il telefono"; },
 };
 
 /* ============ Shift ============ */
@@ -1170,11 +1194,11 @@ const shiftB = $("shift"); let shId = null, shT = 0, shUsed = false;
 shiftB.addEventListener("pointerdown", (e) => {
   e.preventDefault(); try { shiftB.setPointerCapture(e.pointerId); } catch (_) {} audio();
   shId = e.pointerId; shT = performance.now(); shUsed = false; shiftB.classList.add("down"); sound("set");
-  if (land) draft.anchor = draft.anchor == null ? draft.caret : draft.anchor;
+  if (edOn()) draft.anchor = draft.anchor == null ? draft.caret : draft.anchor;
 });
 function shUp(e) {
   if (shId !== e.pointerId) return; shId = null; shiftB.classList.remove("down");
-  if (land) {
+  if (edOn()) {
     if (!shUsed && performance.now() - shT < 400) { if (hasSel()) { draft.anchor = null; renderEd(); sound("menu"); } else saveDraft(); }
     else if (!hasSel()) draft.anchor = null;
     return;
@@ -1194,7 +1218,7 @@ function drawDial() {
   const c = dctx, R = px / 2, lw = Math.max(1, DPR);
   c.clearRect(0, 0, px, px); c.lineWidth = lw; c.strokeStyle = ink(); c.fillStyle = ink();
   c.beginPath(); c.arc(R, R, R - lw / 2, 0, Math.PI * 2); c.stroke();
-  for (const k of [0, Math.PI]) { const a = D.rot + k - Math.PI / 2 - Math.PI / 4, rr = R * 0.85; c.beginPath(); c.arc(R + Math.cos(a) * rr, R + Math.sin(a) * rr, R * 0.05, 0, Math.PI * 2); c.fill(); }
+  for (const k of [0, Math.PI]) { const a = D.rot + k - Math.PI / 2 - Math.PI / 4, sm = s0 < 80, rr = R * (sm ? 0.6 : 0.85); c.beginPath(); c.arc(R + Math.cos(a) * rr, R + Math.sin(a) * rr, sm ? 2.5 * DPR : R * 0.05, 0, Math.PI * 2); c.fill(); }
 }
 function dialPos(e) { const b = dial.getBoundingClientRect(); const x = e.clientX - b.left - b.width / 2, y = e.clientY - b.top - b.height / 2; return { r: Math.hypot(x, y) / (b.width / 2), a: Math.atan2(y, x) }; }
 function step(dir) {
@@ -1500,7 +1524,7 @@ function drawD1() {
   const cols = Math.floor(cv.width / u), rows = Math.floor(cv.height / u), top = Math.floor((rows - BM.NR) / 2), pad = Math.round(10 * DPR / u);
   c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height);
   clearTimeout(BM.mqT);
-  if (land) {                                     // orizzontale: riga di scrittura con cursore e selezione
+  if (edOn()) {                                   // orizzontale (o TEXT su desktop): riga di scrittura con cursore e selezione
     const t = [...draft.text], car = draft.caret, xs = [0]; for (const ch of t) xs.push(xs[xs.length - 1] + pxWidth(ch));
     const vw = cols - pad * 2, cx = xs[car];
     if (cx - BM.edX > vw - 12) BM.edX = cx - vw + 24; else if (cx - BM.edX < 6) BM.edX = Math.max(0, cx - 24);
@@ -1532,12 +1556,15 @@ function drawD1() {
 }
 
 /* ============ Layout ============ */
-let land = false;
+let land = false, desk = false, side = "";
+const edOn = () => land || (desk && mode === "testo");
 function layout() {
   const app = $("app"), sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
   const w = window.innerWidth, h = window.innerHeight, L = w > h && h < 520;
   // iOS dalla Home: se la finestra è più corta dello schermo, la zona dell'indicatore Home è già fuori dalla pagina:
   // non si aggiunge altro margine sotto (altrimenti resta un vuoto)
+  const DK = !L && w >= 900 && h >= 560;           // desktop: Display 2 grande, una sola barra in basso
+  if (DK !== desk) { desk = DK; document.body.classList.toggle("desk", desk); if (!desk) document.body.classList.remove("sdir", "scal"); else applySide(); }
   const gap = (L ? sw : sh) - window.innerHeight;
   app.style.paddingBottom = navigator.standalone && !L && gap > 30 ? "0px" : "";
   if (L !== land) {
@@ -1552,7 +1579,9 @@ function layout() {
   }
   const bar = $("bar"); bar.style.setProperty("--bh", "44px");
   const led = $("led");
-  if (!land) {
+  if (desk) {
+    D.size = 44; shiftB.style.height = "44px"; led.style.left = "12px"; led.style.bottom = ""; led.style.top = "11px"; drawDial();
+  } else if (!land) {
     const W = app.clientWidth;
     D.size = 200;   // diametro fisso (editor)
     shiftB.style.height = D.size + "px";
@@ -1568,11 +1597,66 @@ function layout() {
 window.addEventListener("resize", () => setTimeout(layout, 60));
 window.addEventListener("orientationchange", () => setTimeout(layout, 250));
 if (window.visualViewport) visualViewport.addEventListener("resize", () => setTimeout(layout, 60));
-document.addEventListener("keydown", (e) => {     // anteprima sul Mac
+/* ============ Desktop: pannello a destra, tastiera e rotella ============ */
+function applySide() {                           // a destra: cartelle, calendario o entrambi
+  const sd = mode === "cartelle" || side === "both", sc = mode === "calendario" || side === "both";
+  document.body.classList.toggle("sdir", sd); document.body.classList.toggle("scal", sc);
+  if (sd) renderDirs(); if (sc) renderCal();
+}
+function deskFold() {                            // folder su desktop: DIR → CAL → entrambi → nessuno
+  if (rec) { sound("stop"); return; }
+  if (mode === "cartelle") setMode("calendario");
+  else if (mode === "calendario") { side = "both"; setMode("consulta"); }
+  else if (side === "both") { side = ""; applySide(); }
+  else { side = ""; setMode("cartelle"); }
+  sound("menu"); d1();
+}
+function kbShiftDown() { if (shId !== null) return; shId = "kb"; shT = performance.now(); shUsed = false; shiftB.classList.add("down"); if (edOn()) draft.anchor = draft.anchor == null ? draft.caret : draft.anchor; }
+function kbShiftUp() { if (shId === "kb") shUp({ pointerId: "kb" }); }
+const KEYS = { shift: "Shift", fold: "f", mod: "m" };   // tasti assegnabili
+try { Object.assign(KEYS, JSON.parse(store.get("jrn1-keys", "{}"))); } catch (e) {}
+document.addEventListener("keydown", (e) => {
   if (land) { if (e.key.length === 1) keyPress(e.key); else if (e.key === "Backspace") keyPress("⌫"); else if (e.key === "Enter") keyPress("⏎"); else if (e.key === "ArrowLeft") moveCaret(-1, false, e.shiftKey); else if (e.key === "ArrowRight") moveCaret(1, false, e.shiftKey); return; }
-  if (e.key === "ArrowDown") step(1); else if (e.key === "ArrowUp") step(-1); else if (e.key === "ArrowRight") cycle(1); else if (e.key === "ArrowLeft") cycle(-1);
-  else if (e.key === "Enter") M[mode].shift && M[mode].shift(); else if (e.key === " ") M[mode].center && M[mode].center();
+  if (e.metaKey || e.ctrlKey || e.altKey) { if (desk && e.key === "Enter" && edOn()) { e.preventDefault(); saveDraft(); } return; }
+  audio();
+  if (e.key === KEYS.shift) { if (!e.repeat) kbShiftDown(); return; }
+  if (shId === "kb") shUsed = true;
+  if (edOn()) {                                   // TEXT su desktop: si scrive direttamente, Esc esce
+    e.preventDefault();
+    if (e.key === "Escape") { setMode("consulta"); return; }
+    if (e.key.length === 1) { const h = shId; shId = null; insert(e.key); shId = h; draft.anchor = h !== null ? draft.caret : null; }
+    else if (e.key === "Backspace") keyPress("⌫"); else if (e.key === "Enter") keyPress("⏎");
+    else if (e.key === "ArrowLeft") moveCaret(-1, false, e.shiftKey); else if (e.key === "ArrowRight") moveCaret(1, false, e.shiftKey);
+    else if (e.key === "ArrowUp" || e.key === "ArrowDown") { step(e.key === "ArrowDown" ? 1 : -1); }
+    renderEd(); d1(); return;
+  }
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); if (step(k === "ArrowDown" ? 1 : -1)) sound(shiftHeld() ? "detent" : "browse"); else sound("stop"); }
+  else if (k === "ArrowRight" || k === "ArrowLeft") { e.preventDefault(); cycle(k === "ArrowRight" ? 1 : -1); }
+  else if (k === "Enter") { M[mode].shift && M[mode].shift(); }
+  else if (k === " ") { e.preventDefault(); M[mode].center && M[mode].center(); }
+  else if (k === KEYS.fold) { desk ? deskFold() : ringMode(FOLD); }
+  else if (k === KEYS.mod) { if (!e.repeat) { modT = setTimeout(() => { modT = -1; sound("act"); exportAll(); }, 650); } return; }
+  else if (k === "Escape") { if (inDetail) closeDetail(); else setMode("consulta"); }
+  d1();
 });
+let modT = 0;
+document.addEventListener("keyup", (e) => {
+  if (e.key === KEYS.shift) kbShiftUp();
+  else if ((e.key.length === 1 ? e.key.toLowerCase() : e.key) === KEYS.mod && !edOn()) { if (modT !== -1) { clearTimeout(modT); ringMode(MODS); } modT = 0; }
+});
+window.addEventListener("blur", kbShiftUp);
+let wAcc = 0;
+$("app").addEventListener("wheel", (e) => {      // rotella = ghiera, Shift + rotella = secondo asse
+  if (!desk) return; e.preventDefault(); audio();
+  let dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; if (!dy) dy = e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX;
+  const sh = shiftHeld() || e.shiftKey; if (sh && shId === "kb") shUsed = true;
+  D.rot += dy / 300; drawDial();
+  if (!sh && M[mode].scroll) { const sc = M[mode].scroll(dy); if (sc !== null && sc !== undefined) { if (!sc) { wAcc += dy; if (Math.abs(wAcc) >= 60) { const d = wAcc > 0 ? 1 : -1; wAcc = 0; sound(M[mode].dial(d) ? "browse" : "stop"); } } d1(); return; } }
+  wAcc += dy;
+  while (Math.abs(wAcc) >= 60) { const d = wAcc > 0 ? 1 : -1; wAcc -= d * 60; const h = M[mode]; const ok = sh ? h.sdial && h.sdial(d) : h.dial && h.dial(d); if (ok) sound(sh ? "detent" : "browse"); else { sound("stop"); wAcc = 0; break; } }
+  d1();
+}, { passive: false });
 
 /* ============ Avvio ============ */
 async function demo() {                        // voci di esempio solo al primissimo avvio

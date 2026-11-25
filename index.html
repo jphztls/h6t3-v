@@ -107,7 +107,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #ov { touch-action: none; }
 
 /* Barra: frecce (un tasto unico) + Display 1 su una riga */
-#bar { flex: none; display: flex; height: 44px; margin: var(--space-2) var(--space-3) 0; }
+#bar { flex: none; display: flex; height: 32px; margin: var(--space-2) var(--space-3) 0; }
 #arrows { flex: none; display: flex; height: 100%; }
 #arrows button { height: 100%; width: var(--bh, 44px); flex: none; display: flex; align-items: center; justify-content: center; }
 #arrows button + button { border-left: var(--border-hairline) solid var(--line); }
@@ -146,7 +146,7 @@ body.bmp #ed .car { display: none; }
 #dial { display: block; touch-action: none; }
 #strip { display: none; touch-action: none; }
 #kb { display: none; }
-#mbtn { display: flex; flex-direction: column; gap: var(--space-4); }   /* tasti dedicati: folder (sopra) e mod (sotto) */
+#mbtn { display: flex; flex-direction: column; justify-content: space-between; align-self: stretch; }   /* tasti dedicati: folder (sopra) e mod (sotto) */
 .rb { width: 44px; height: 44px; border-radius: 50%; border: var(--border-hairline) solid var(--line); touch-action: none; }
 .rb.down { background: var(--surface-inverse); }
 body.land #mbtn { display: none; }
@@ -176,6 +176,7 @@ body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }
 /* ===== Modifiche dall'editor JRN-1 (23/11, base jrn1-v13) ===== */
 :root { --text: 400 14px/16px var(--font-sans); --space-2: 6px; --space-4: 24px; }
 .top .theme svg { width: 12px; height: 12px; }
+.top { order: 99; }   /* JRN-1 e tema in fondo a tutto */
 #d2 { margin: 8px 12px 0; }
 #d2.box { border: 0; }   /* Display 2 senza bordo */
 .it { padding: 8px 6px 6px; }
@@ -416,11 +417,12 @@ const whenDate = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8,
 const fmtWhen = (s) => { const d = typeof s === "string" ? whenDate(s) : s; return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + pad(d.getFullYear() % 100) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
 const cur = () => vis()[sel];
 const urls = new Map();
-function urlOf(it, k) { const key = it.name + "#" + (k || 0); if (!urls.has(key)) urls.set(key, URL.createObjectURL(parts(it)[k || 0].blob)); return urls.get(key); }
+const burl = new WeakMap();                         // un solo URL per file: non cambia se le parti si riordinano
+function urlOf(it, k) { const b = parts(it)[k || 0].blob; if (!burl.has(b)) burl.set(b, URL.createObjectURL(b)); return burl.get(b); }
 /* Filtro delle scansioni: il file resta solo raddrizzato, il filtro si calcola quando si guarda */
-const fcache = new Map();
+const fcache = new Map(), fblob = new WeakMap();
 function filteredUrl(it, k) {
-  const p = parts(it)[k], key = it.name + "#" + k + "#" + p.filter + "#" + p.blob.size;
+  const p = parts(it)[k]; if (!fblob.has(p.blob)) fblob.set(p.blob, fblob.size = (fblob.size || 0) + 1); const key = fblob.get(p.blob) + "#" + p.filter;   // per file, non per posizione
   if (!fcache.has(key)) fcache.set(key, (async () => {
     const bm = await createImageBitmap(p.blob), s = Math.min(1, 1600 / Math.max(bm.width, bm.height));
     const c = canvasOf(Math.round(bm.width * s), Math.round(bm.height * s)), x = c.getContext("2d"); x.drawImage(bm, 0, 0, c.width, c.height);
@@ -750,8 +752,10 @@ async function setParts(it, list) {               // riscrive le parti di una no
   await dbPut(it);
 }
 let RO = null;                                     // ordine pagine: { it, k }
-function renderRO() {                            // anteprime 3×3: 9 pagine alla volta, numero sotto ognuna
-  const dt = $("detail"), it = RO.it, P = parts(it), from = Math.floor(RO.k / 9) * 9; dt.innerHTML = ""; dt.scrollTop = 0; showPane("detail");
+function renderRO(full) {                        // anteprime 3×3: 9 pagine alla volta, numero sotto ognuna
+  const dt = $("detail"), it = RO.it, P = parts(it), from = Math.floor(RO.k / 9) * 9;
+  if (!full && RO.from === from && dt.querySelector(".rog")) { dt.querySelectorAll(".pg").forEach((el, i) => el.classList.toggle("ro", from + i === RO.k)); d1(); return; }   // solo la selezione: immediato
+  RO.from = from; dt.innerHTML = ""; dt.scrollTop = 0; showPane("detail");
   const g = document.createElement("div"); g.className = "rog"; dt.appendChild(g);
   for (let k = from; k < Math.min(P.length, from + 9); k++) {
     const p = P[k], pg = document.createElement("div"); pg.className = "pg" + (k === RO.k ? " ro" : "");
@@ -771,7 +775,10 @@ M.edit = {
   async sdial(d) {
     if (RO) {                                     // Shift + ghiera: sposta la pagina scelta
       const L = parts(RO.it).slice(), j = RO.k + d; if (j < 0 || j >= L.length) return false;
-      [L[RO.k], L[j]] = [L[j], L[RO.k]]; await setParts(RO.it, L); RO.k = j; renderRO(); return true;
+      [L[RO.k], L[j]] = [L[j], L[RO.k]]; RO.k = j;
+      const g = $("detail").querySelectorAll(".pg"), a = g[j - RO.from], b = g[j - d - RO.from];   // scambia subito le anteprime, poi salva
+      if (a && b && Math.floor(j / 9) * 9 === RO.from) { const ta = a.querySelector(".th"), tb = b.querySelector(".th"), m = document.createComment(""); a.replaceChild(m, ta); b.replaceChild(ta, tb); a.replaceChild(tb, m); renderRO(); } else renderRO(true);
+      setParts(RO.it, L); return true;
     }
     confirmDel = false; editAct = (editAct + d + EDIT_ACT.length) % EDIT_ACT.length; d1(); return true;
   },
@@ -1468,13 +1475,16 @@ $("fzip").addEventListener("change", async (ev) => {
 /* Font: Pixel Operator di Jayvee Enaguas (CC0 1.0), convertito in bitmap: [avanzamento, 16 righe come bit] */
 const PXF = {" ":[4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"!":[5,0,0,0,0,4,4,4,4,4,4,4,0,4,0,0,0],"\"":[7,0,0,0,0,20,20,20,0,0,0,0,0,0,0,0,0],"#":[8,0,0,0,0,36,36,126,36,36,36,126,36,36,0,0,0],"$":[7,0,0,8,8,28,42,40,40,28,10,10,42,28,8,8,0],"%":[9,0,0,0,0,64,160,164,72,16,36,74,10,4,0,0,0],"&":[7,0,0,0,0,28,34,32,32,28,34,34,34,30,0,0,0],"'":[5,0,0,0,0,4,4,4,0,0,0,0,0,0,0,0,0],"(":[7,0,0,0,0,2,4,8,8,8,8,8,4,2,0,0,0],")":[7,0,0,0,0,32,16,8,8,8,8,8,16,32,0,0,0],"*":[7,0,0,0,0,8,42,28,42,8,0,0,0,0,0,0,0],"+":[7,0,0,0,0,0,0,8,8,62,8,8,0,0,0,0,0],",":[5,0,0,0,0,0,0,0,0,0,0,0,0,4,4,8,0],"-":[6,0,0,0,0,0,0,0,0,30,0,0,0,0,0,0,0],".":[5,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0],"/":[5,0,0,0,0,2,2,2,4,4,4,8,8,8,0,0,0],"0":[7,0,0,0,0,28,34,34,38,42,50,34,34,28,0,0,0],"1":[7,0,0,0,0,4,12,20,4,4,4,4,4,4,0,0,0],"2":[7,0,0,0,0,28,34,2,4,8,16,32,32,62,0,0,0],"3":[7,0,0,0,0,28,34,2,2,12,2,2,34,28,0,0,0],"4":[7,0,0,0,0,2,6,10,18,34,62,2,2,2,0,0,0],"5":[7,0,0,0,0,62,32,32,60,2,2,2,34,28,0,0,0],"6":[7,0,0,0,0,28,34,32,32,60,34,34,34,28,0,0,0],"7":[7,0,0,0,0,62,2,2,4,8,16,32,32,32,0,0,0],"8":[7,0,0,0,0,28,34,34,34,28,34,34,34,28,0,0,0],"9":[7,0,0,0,0,28,34,34,34,30,2,2,34,28,0,0,0],":":[5,0,0,0,0,0,0,4,0,0,0,0,0,4,0,0,0],";":[5,0,0,0,0,0,0,4,0,0,0,0,0,4,4,8,0],"<":[5,0,0,0,0,0,0,2,4,8,4,2,0,0,0,0,0],"=":[6,0,0,0,0,0,0,0,30,0,30,0,0,0,0,0,0],">":[5,0,0,0,0,0,0,8,4,2,4,8,0,0,0,0,0],"?":[7,0,0,0,0,28,34,2,4,8,8,8,0,8,0,0,0],"@":[9,0,0,0,0,124,130,154,170,170,170,156,128,124,0,0,0],"A":[7,0,0,0,0,28,34,34,34,34,62,34,34,34,0,0,0],"B":[7,0,0,0,0,60,34,34,34,60,34,34,34,60,0,0,0],"C":[7,0,0,0,0,28,34,32,32,32,32,32,34,28,0,0,0],"D":[7,0,0,0,0,60,34,34,34,34,34,34,34,60,0,0,0],"E":[7,0,0,0,0,62,32,32,32,56,32,32,32,62,0,0,0],"F":[7,0,0,0,0,62,32,32,32,56,32,32,32,32,0,0,0],"G":[7,0,0,0,0,28,34,32,32,38,34,34,34,30,0,0,0],"H":[7,0,0,0,0,34,34,34,34,62,34,34,34,34,0,0,0],"I":[5,0,0,0,0,4,4,4,4,4,4,4,4,4,0,0,0],"J":[7,0,0,0,0,2,2,2,2,2,2,2,34,28,0,0,0],"K":[7,0,0,0,0,34,34,36,40,48,40,36,34,34,0,0,0],"L":[7,0,0,0,0,32,32,32,32,32,32,32,32,62,0,0,0],"M":[9,0,0,0,0,130,130,198,170,146,130,130,130,130,0,0,0],"N":[7,0,0,0,0,34,34,34,50,42,38,34,34,34,0,0,0],"O":[7,0,0,0,0,28,34,34,34,34,34,34,34,28,0,0,0],"P":[7,0,0,0,0,60,34,34,34,60,32,32,32,32,0,0,0],"Q":[7,0,0,0,0,28,34,34,34,34,34,42,36,26,0,0,0],"R":[7,0,0,0,0,60,34,34,34,60,40,36,34,34,0,0,0],"S":[7,0,0,0,0,28,34,32,32,28,2,2,34,28,0,0,0],"T":[7,0,0,0,0,62,8,8,8,8,8,8,8,8,0,0,0],"U":[7,0,0,0,0,34,34,34,34,34,34,34,34,28,0,0,0],"V":[7,0,0,0,0,34,34,34,34,34,34,34,20,8,0,0,0],"W":[9,0,0,0,0,130,130,146,146,146,146,146,146,108,0,0,0],"X":[7,0,0,0,0,34,34,34,20,8,20,34,34,34,0,0,0],"Y":[7,0,0,0,0,34,34,34,20,8,8,8,8,8,0,0,0],"Z":[7,0,0,0,0,62,2,2,4,8,16,32,32,62,0,0,0],"[":[7,0,0,0,0,14,8,8,8,8,8,8,8,14,0,0,0],"\\":[5,0,0,0,0,8,8,8,4,4,4,2,2,2,0,0,0],"]":[7,0,0,0,0,56,8,8,8,8,8,8,8,56,0,0,0],"^":[7,0,0,0,0,8,20,34,0,0,0,0,0,0,0,0,0],"_":[5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,31,0],"`":[5,0,0,0,0,8,4,0,0,0,0,0,0,0,0,0,0],"a":[7,0,0,0,0,0,0,28,34,2,30,34,34,30,0,0,0],"b":[7,0,0,0,0,32,32,60,34,34,34,34,34,60,0,0,0],"c":[7,0,0,0,0,0,0,28,34,32,32,32,34,28,0,0,0],"d":[7,0,0,0,0,2,2,30,34,34,34,34,34,30,0,0,0],"e":[7,0,0,0,0,0,0,28,34,34,62,32,34,28,0,0,0],"f":[6,0,0,0,0,6,8,8,30,8,8,8,8,8,0,0,0],"g":[7,0,0,0,0,0,0,30,34,34,34,34,30,2,34,28,0],"h":[7,0,0,0,0,32,32,60,34,34,34,34,34,34,0,0,0],"i":[5,0,0,0,0,4,0,4,4,4,4,4,4,4,0,0,0],"j":[7,0,0,0,0,2,0,2,2,2,2,2,2,2,34,28,0],"k":[7,0,0,0,0,32,32,34,36,40,48,40,36,34,0,0,0],"l":[5,0,0,0,0,4,4,4,4,4,4,4,4,2,0,0,0],"m":[9,0,0,0,0,0,0,236,146,146,146,146,130,130,0,0,0],"n":[7,0,0,0,0,0,0,60,34,34,34,34,34,34,0,0,0],"o":[7,0,0,0,0,0,0,28,34,34,34,34,34,28,0,0,0],"p":[7,0,0,0,0,0,0,60,34,34,34,34,34,60,32,32,0],"q":[7,0,0,0,0,0,0,30,34,34,34,34,34,30,2,2,0],"r":[7,0,0,0,0,0,0,38,40,48,32,32,32,32,0,0,0],"s":[7,0,0,0,0,0,0,28,34,32,28,2,34,28,0,0,0],"t":[6,0,0,0,0,0,8,30,8,8,8,8,8,6,0,0,0],"u":[7,0,0,0,0,0,0,34,34,34,34,34,34,28,0,0,0],"v":[7,0,0,0,0,0,0,34,34,34,34,34,20,8,0,0,0],"w":[9,0,0,0,0,0,0,130,130,146,146,146,146,108,0,0,0],"x":[7,0,0,0,0,0,0,34,34,20,8,20,34,34,0,0,0],"y":[7,0,0,0,0,0,0,34,34,34,34,34,30,2,34,28,0],"z":[7,0,0,0,0,0,0,62,2,4,8,16,32,62,0,0,0],"{":[7,0,0,0,0,6,8,8,8,16,8,8,8,6,0,0,0],"|":[5,0,0,0,0,4,4,4,4,4,4,4,4,4,0,0,0],"}":[7,0,0,0,0,48,8,8,8,4,8,8,8,48,0,0,0],"~":[8,0,0,0,0,50,76,0,0,0,0,0,0,0,0,0,0],"à":[7,0,0,0,16,8,0,28,34,2,30,34,34,30,0,0,0],"è":[7,0,0,0,16,8,0,28,34,34,62,32,34,28,0,0,0],"é":[7,0,0,0,4,8,0,28,34,34,62,32,34,28,0,0,0],"ì":[5,0,0,0,8,4,0,4,4,4,4,4,4,4,0,0,0],"ò":[7,0,0,0,16,8,0,28,34,34,34,34,34,28,0,0,0],"ù":[7,0,0,0,16,8,0,34,34,34,34,34,34,28,0,0,0],"À":[7,0,16,8,0,28,34,34,34,34,62,34,34,34,0,0,0],"È":[7,0,16,8,0,62,32,32,32,56,32,32,32,62,0,0,0],"É":[7,0,4,8,0,62,32,32,32,56,32,32,32,62,0,0,0],"Ì":[5,0,8,4,0,4,4,4,4,4,4,4,4,4,0,0,0],"Ò":[7,0,16,8,0,28,34,34,34,34,34,34,34,28,0,0,0],"Ù":[7,0,16,8,0,34,34,34,34,34,34,34,34,28,0,0,0],"á":[7,0,0,0,4,8,0,28,34,2,30,34,34,30,0,0,0],"í":[5,0,0,0,2,4,0,4,4,4,4,4,4,4,0,0,0],"ó":[7,0,0,0,4,8,0,28,34,34,34,34,34,28,0,0,0],"ú":[7,0,0,0,4,8,0,34,34,34,34,34,34,28,0,0,0],"ç":[7,0,0,0,0,0,0,28,34,32,32,32,34,28,8,4,24],"Ç":[7,0,0,0,0,28,34,32,32,32,32,32,34,28,8,4,24],"°":[6,0,0,0,0,12,18,18,12,0,0,0,0,0,0,0,0],"€":[8,0,0,0,0,28,34,32,124,32,120,32,34,28,0,0,0],"…":[9,0,0,0,0,0,0,0,0,0,0,0,0,146,0,0,0],"×":[7,0,0,0,0,0,0,34,20,8,20,34,0,0,0,0,0],"·":[5,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0],"’":[5,0,0,0,0,4,4,8,0,0,0,0,0,0,0,0,0],"“":[7,0,0,0,0,10,20,20,0,0,0,0,0,0,0,0,0],"”":[7,0,0,0,0,20,20,40,0,0,0,0,0,0,0,0,0],"«":[8,0,0,0,0,0,0,18,36,72,36,18,0,0,0,0,0],"»":[8,0,0,0,0,0,0,72,36,18,36,72,0,0,0,0,0],"ñ":[7,0,0,0,25,38,0,60,34,34,34,34,34,34,0,0,0],"ü":[7,0,0,0,0,20,0,34,34,34,34,34,34,28,0,0,0],"→":[8,0,0,0,0,0,0,8,4,252,4,8,0,0,0,0,0],"↵":[8,0,0,0,0,0,0,4,4,68,252,64,0,0,0,0,0]};
 const BM = { cv: null, x: null, mq: 0, mqT: 0, mqKey: "", edX: 0, u: 3, R0: 3, NR: 12 };   // righe usate: 3..14 (accenti e discendenti)
+const PXFB = {"A":[8,0,0,0,0,60,102,102,102,102,126,102,102,102,0,0,0],"B":[8,0,0,0,0,124,102,102,102,124,102,102,102,124,0,0,0],"C":[8,0,0,0,0,60,102,96,96,96,96,96,102,60,0,0,0],"D":[8,0,0,0,0,124,102,102,102,102,102,102,102,124,0,0,0],"E":[8,0,0,0,0,126,96,96,96,120,96,96,96,126,0,0,0],"F":[8,0,0,0,0,126,96,96,96,120,96,96,96,96,0,0,0],"G":[8,0,0,0,0,60,102,96,96,110,102,102,102,62,0,0,0],"H":[8,0,0,0,0,102,102,102,102,126,102,102,102,102,0,0,0],"I":[6,0,0,0,0,12,12,12,12,12,12,12,12,12,0,0,0],"J":[8,0,0,0,0,6,6,6,6,6,6,6,102,60,0,0,0],"K":[8,0,0,0,0,102,102,108,120,112,120,108,102,102,0,0,0],"L":[8,0,0,0,0,96,96,96,96,96,96,96,96,126,0,0,0],"M":[9,0,0,0,0,198,198,238,254,214,198,198,198,198,0,0,0],"N":[8,0,0,0,0,102,102,102,118,126,110,102,102,102,0,0,0],"O":[8,0,0,0,0,60,102,102,102,102,102,102,102,60,0,0,0],"P":[8,0,0,0,0,124,102,102,102,124,96,96,96,96,0,0,0],"Q":[8,0,0,0,0,60,102,102,102,102,118,126,108,54,0,0,0],"R":[8,0,0,0,0,124,102,102,102,124,120,108,102,102,0,0,0],"S":[8,0,0,0,0,60,102,96,96,60,6,6,102,60,0,0,0],"T":[8,0,0,0,0,126,24,24,24,24,24,24,24,24,0,0,0],"U":[8,0,0,0,0,102,102,102,102,102,102,102,102,60,0,0,0],"V":[8,0,0,0,0,102,102,102,102,102,102,102,60,24,0,0,0],"W":[9,0,0,0,0,198,198,214,214,214,214,214,214,108,0,0,0],"X":[8,0,0,0,0,102,102,102,60,24,60,102,102,102,0,0,0],"Y":[8,0,0,0,0,102,102,102,60,24,24,24,24,24,0,0,0],"Z":[8,0,0,0,0,126,6,6,12,24,48,96,96,126,0,0,0],"0":[8,0,0,0,0,60,102,102,110,126,118,102,102,60,0,0,0],"1":[8,0,0,0,0,12,28,60,44,12,12,12,12,12,0,0,0],"2":[8,0,0,0,0,60,102,6,12,24,48,96,96,126,0,0,0],"3":[8,0,0,0,0,60,102,6,6,28,6,6,102,60,0,0,0],"4":[8,0,0,0,0,6,14,30,54,102,126,6,6,6,0,0,0],"5":[8,0,0,0,0,126,96,96,124,6,6,6,102,60,0,0,0],"6":[8,0,0,0,0,60,102,96,96,124,102,102,102,60,0,0,0],"7":[8,0,0,0,0,126,6,6,12,24,48,96,96,96,0,0,0],"8":[8,0,0,0,0,60,102,102,102,60,102,102,102,60,0,0,0],"9":[8,0,0,0,0,60,102,102,102,62,6,6,102,60,0,0,0]," ":[4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]};   // Pixel Operator Bold: solo le sigle delle modalità
+const PXI = {"mic":[8,0,0,0,0,56,68,68,68,186,130,124,16,56,0,0,0],"cam":[12,0,0,0,0,448,2044,2050,2274,2322,2322,2274,2050,2044,0,0,0],"scan":[8,0,0,0,0,248,140,138,142,130,186,130,186,254,0,0,0],"file":[11,0,0,0,0,1920,1088,1086,1026,1026,1026,1026,1026,2046,0,0,0],"text":[10,0,0,0,0,1022,546,32,32,32,32,32,32,112,0,0,0]};   // icone a pixel: microfono, camera, foglio, cartella file, testo
+const MODEICON = { registra: "mic", foto: "cam", scansione: "scan", file: "file", testo: "text" };
 const pxGlyph = (ch) => PXF[ch] || (ch === "\n" ? PXF["↵"] : PXF["?"]);
 const pxWidth = (ch) => pxGlyph(ch)[0];
 const pxText = (s) => { let w = 0; for (const ch of s) w += pxWidth(ch); return w; };
-function pxDraw(s, X, top, col) {                  // X, top in pixel del display (top = riga 3 del font); torna la X finale
+function pxDraw(s, X, top, col, font) {            // X, top in pixel del display (top = riga 3 del font); torna la X finale
   const c = BM.x, u = BM.u, gp = u >= 4 ? 1 : 0; c.fillStyle = col;   // pixel leggermente separati
-  for (const ch of s) {
-    const g = pxGlyph(ch), w = g[0];
+  for (const ch of (Array.isArray(s) ? s : [...s])) {
+    const g = font === "icon" ? PXI[ch] : font === "bold" ? PXFB[ch] || pxGlyph(ch) : pxGlyph(ch), w = g[0];
     for (let r = 0; r < BM.NR; r++) { const v = g[1 + BM.R0 + r]; if (v) for (let k = 0; k < w; k++) if ((v >> (w - 1 - k)) & 1) c.fillRect((X + k) * u, (top + r) * u, u - gp, u - gp); }
     X += w;
   }
@@ -1501,7 +1511,9 @@ function drawD1() {
     c.restore(); BM.mqT = setTimeout(drawD1, 530); return;
   }
   const lab = msg ? LABEL[mode] : M[mode].lab ? M[mode].lab() : LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, "  "), tm = $("d1t").textContent;
-  let X = pad; if (lab) X = pxDraw(lab, X, top, inkC) + 6;
+  let X = pad;
+  if (MODEICON[mode] && !msg) X = pxDraw([MODEICON[mode]], X, top, inkC, "icon") + 5;   // cattura: icona a pixel
+  else if (lab) X = pxDraw(lab, X, top, inkC, LABEL[mode] === lab ? "bold" : null) + 6;   // sigla in grassetto
   const end = cols - pad;
   if (rec && !msg) {                              // REC: VU a barre da 1px, poi il tempo
     const tw = pxText(tm), tx = end - tw; X = pxDraw(val, X, top, inkC) + (val ? 6 : 0);
@@ -1538,7 +1550,7 @@ function layout() {
       draft.caret = draft.text.length; draft.anchor = null; kbPage = "abc"; caps = autoCaps() ? 1 : 0; renderKb(); renderEd();
     } else if (editTarget) { editTarget = null; draft.text = store.get("jrn1-draft", ""); draft.caret = draft.text.length; }
   }
-  const bar = $("bar"); requestAnimationFrame(() => bar.style.setProperty("--bh", bar.clientHeight + "px"));
+  const bar = $("bar"); bar.style.setProperty("--bh", "44px");
   const led = $("led");
   if (!land) {
     const W = app.clientWidth;

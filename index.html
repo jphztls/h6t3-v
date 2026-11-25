@@ -228,6 +228,9 @@ body.desk #detail img { width: auto; max-width: 100%; max-height: 80vh; }
 #link.qr #qr, #link.cam #lvid { display: block; }
 body.desk #link.cam #lvid { width: 360px; height: 270px; transform: scaleX(-1); }
 body.desk #qr { width: 300px; }
+
+.led.sync { background: #30d158 !important; animation: blink 1s steps(1) infinite; }   /* sincronizzazione attiva */
+.led.rec { background: var(--led) !important; animation: blink 1s steps(1) infinite; }   /* registrazione: vince il rosso */
 </style>
 </head>
 <body>
@@ -405,7 +408,7 @@ function cycle(dir) {                              // frecce: scorrono le modali
   setMode(g[(i + dir + g.length) % g.length]); sound("menu");
 }
 /* Tasti dedicati: folder cicla cartelle → calendario → base, mod cicla edit → elimina → impostazioni → base */
-const FOLD = ["cartelle", "calendario"], MODS = ["edit", "elimina", "archivio", "control"];
+const FOLD = ["cartelle", "calendario"], MODS = ["edit", "elimina", "archivio"];
 function ringMode(list) { const i = list.indexOf(mode); setMode(i < 0 ? list[0] : i + 1 < list.length ? list[i + 1] : "consulta"); sound("menu"); d1(); }
 function groupOf(m) { return FOLD.includes(m) ? FOLD : MODS.includes(m) ? MODS : ["consulta"].concat(CAP); }
 function showPane(id) { if (desk && (id === "cal" || id === "dirs")) id = "feed"; for (const p of document.querySelectorAll(".pane")) p.classList.toggle("on", p.id === id); }
@@ -433,14 +436,40 @@ function arrowBtn(el, dir) {
   ["pointerup", "pointercancel", "pointerleave"].forEach((t) => el.addEventListener(t, () => el.classList.remove("down")));
 }
 arrowBtn($("prev"), -1); arrowBtn($("next"), 1);
-function roundBtn(el, tap, hold) {
-  let t = 0, held = false;
-  el.addEventListener("pointerdown", (e) => { e.preventDefault(); audio(); el.classList.add("down"); sound("set"); held = false; clearTimeout(t); if (hold) t = setTimeout(() => { held = true; sound("act"); }, 650); });
-  el.addEventListener("pointerup", () => { el.classList.remove("down"); clearTimeout(t); if (held && hold) hold(); else tap(); });   // al rilascio: vale come gesto per la condivisione
-  ["pointercancel", "pointerleave"].forEach((x) => el.addEventListener(x, () => { el.classList.remove("down"); clearTimeout(t); }));
+/* Tasti folder e mod (anche F e M da tastiera). Premuti insieme: entra/esce da CTRL; tenuti insieme: sincronizzazione sì/no */
+const BT = { fold: { down: false, t: 0, held: false }, mod: { down: false, t: 0, held: false }, chord: false, chordHeld: false, chordT: 0 };
+const foldTap = () => (remoteOn() ? rtSend({ t: "in", k: "fold" }) : desk ? deskFold() : ringMode(FOLD));
+const modTap = () => (remoteOn() ? rtSend({ t: "in", k: "mod" }) : ringMode(MODS));
+function btnDown(w) {
+  const b = BT[w], o = BT[w === "fold" ? "mod" : "fold"]; if (b.down) return;
+  audio(); sound("set"); b.down = true; b.held = false; clearTimeout(b.t);
+  if (o.down) {                                   // il secondo tasto: accordo
+    BT.chord = true; BT.chordHeld = false; clearTimeout(o.t); clearTimeout(BT.chordT);
+    BT.chordT = setTimeout(() => { BT.chordHeld = true; sound("act"); toggleSync(); }, 650);
+    return;
+  }
+  if (w === "mod") b.t = setTimeout(() => { b.held = true; sound("act"); }, 650);   // mod tenuto: esporta tutto
 }
-roundBtn($("bfold"), () => (remoteOn() ? rtSend({ t: "in", k: "fold" }) : desk ? deskFold() : ringMode(FOLD)));
-roundBtn($("bmod"), () => (remoteOn() ? rtSend({ t: "in", k: "mod" }) : ringMode(MODS)), () => (remoteOn() ? setMode("consulta") : exportAll()));
+function btnUp(w) {
+  const b = BT[w], o = BT[w === "fold" ? "mod" : "fold"]; if (!b.down) return;
+  b.down = false; clearTimeout(b.t);
+  if (BT.chord) { clearTimeout(BT.chordT); if (!o.down) { BT.chord = false; if (!BT.chordHeld) toggleControl(); } return; }
+  if (w === "mod" && b.held) exportAll(); else (w === "fold" ? foldTap : modTap)();
+}
+function toggleControl() { if (rec) { sound("stop"); return; } setMode(mode === "control" ? "consulta" : "control"); sound("menu"); d1(); }
+function toggleSync(fromPeer) {
+  S.sync = S.sync === false; saveS(); ledUpdate();
+  if (!fromPeer && RT.open) rtSend({ t: "syncmode", on: S.sync });
+  if (S.sync && RT.open) rtIndex();
+  flash(S.sync ? "Sincronizzazione attiva" : "Sincronizzazione spenta");
+}
+function ledUpdate() { const l = $("led"); l.classList.toggle("sync", RT.open && S.sync !== false); }   // verde lampeggiante; durante una registrazione resta rosso
+for (const [w, id] of [["fold", "bfold"], ["mod", "bmod"]]) {
+  const el = $(id);
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} el.classList.add("down"); btnDown(w); });
+  el.addEventListener("pointerup", () => { el.classList.remove("down"); btnUp(w); });   // al rilascio: vale come gesto per la condivisione
+  el.addEventListener("pointercancel", () => { el.classList.remove("down"); const b = BT[w]; b.down = false; clearTimeout(b.t); clearTimeout(BT.chordT); BT.chord = false; });
+}
 async function exportAll() { if (rec) return; S.lastExp = Date.now(); saveS(); await exportZip(items, "JRN-1_tutto_" + ymd(new Date()) + ".zip"); }
 $("theme").addEventListener("click", () => { audio(); S.theme = S.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = S.theme; saveS(); drawDial(); drawStrip(); renderFeed(); if (mode === "calendario") renderCal(); sound("set"); });
 
@@ -1280,16 +1309,16 @@ function sdpUnpack(str) {
 }
 const gathered = (pc) => new Promise((r) => { if (pc.iceGatheringState === "complete") return r(); pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && r()); setTimeout(r, 2500); });
 function rtStatus(m) { RT.msg = m; d1(); }
-function rtClose() { try { RT.dc && RT.dc.close(); RT.pc && RT.pc.close(); } catch (e) {} RT.pc = RT.dc = null; RT.open = false; }
+function rtClose() { try { RT.dc && RT.dc.close(); RT.pc && RT.pc.close(); } catch (e) {} RT.pc = RT.dc = null; RT.open = false; ledUpdate(); }
 function newPc() {
   rtClose(); const pc = (RT.pc = new RTCPeerConnection({ iceServers: [] }));   // nessun server esterno: solo rete locale
-  pc.onconnectionstatechange = () => { if (["failed", "closed", "disconnected"].includes(pc.connectionState) && RT.pc === pc) { RT.open = false; rtStatus(pc.connectionState === "failed" ? "collegamento non riuscito: stessa rete Wi-Fi?" : "scollegato"); } };
+  pc.onconnectionstatechange = () => { if (["failed", "closed", "disconnected"].includes(pc.connectionState) && RT.pc === pc) { RT.open = false; ledUpdate(); rtStatus(pc.connectionState === "failed" ? "collegamento non riuscito: stessa rete Wi-Fi?" : "scollegato"); } };
   return pc;
 }
 function useDc(dc) {
   RT.dc = dc; dc.binaryType = "arraybuffer";
-  dc.onopen = () => { RT.open = true; camStop(); showLink(""); rtStatus(""); sound("set"); rtIndex(); if (mode === "control") showPane("feed"); };
-  dc.onclose = () => { RT.open = false; d1(); };
+  dc.onopen = () => { RT.open = true; ledUpdate(); camStop(); showLink(""); rtStatus(""); sound("set"); rtIndex(); if (mode === "control") showPane("feed"); };
+  dc.onclose = () => { RT.open = false; ledUpdate(); d1(); };
   dc.onmessage = (e) => rtRecv(e.data);
 }
 function drawQr(text) {
@@ -1340,12 +1369,12 @@ function rtSend(o) { if (RT.open) try { RT.dc.send(JSON.stringify(o)); } catch (
 async function rtSendBuf(ab) { for (let o = 0; o < ab.byteLength; o += 65536) { while (RT.dc.bufferedAmount > 4e6) await new Promise((r) => setTimeout(r, 15)); RT.dc.send(ab.slice(o, o + 65536)); } }
 /* --- sincronizzazione automatica nei due sensi, finché sono collegati --- */
 const SQ = { keys: new Set(), dels: new Set(), t: 0, pumping: false };
-function syncLater(k) { if (!RT.open) return; SQ.keys.add(k); clearTimeout(SQ.t); SQ.t = setTimeout(syncPump, 400); }
-function syncDel(k) { if (!RT.open) return; SQ.keys.delete(k); rtSend({ t: "del", key: k, at: SY.tomb[k] || Date.now() }); }
+function syncLater(k) { if (!RT.open || S.sync === false) return; SQ.keys.add(k); clearTimeout(SQ.t); SQ.t = setTimeout(syncPump, 400); }
+function syncDel(k) { if (!RT.open || S.sync === false) return; SQ.keys.delete(k); rtSend({ t: "del", key: k, at: SY.tomb[k] || Date.now() }); }
 var setSnap;
 function syncSet() {                               // cartelle e tipi: vince l'ultima modifica
   const snap = JSON.stringify([S.folders, S.ftypes]); if (setSnap === undefined) { setSnap = snap; return; } if (snap === setSnap) return;
-  setSnap = snap; S.fmod = Date.now(); store.set("jrn1-set", JSON.stringify(S)); if (RT.open) rtSend({ t: "set", folders: S.folders, ftypes: S.ftypes, fmod: S.fmod });
+  setSnap = snap; S.fmod = Date.now(); store.set("jrn1-set", JSON.stringify(S)); if (RT.open && S.sync !== false) rtSend({ t: "set", folders: S.folders, ftypes: S.ftypes, fmod: S.fmod });
 }
 function applySet(m) { if ((m.fmod || 0) <= (S.fmod || 0)) return; S.folders = m.folders; S.ftypes = m.ftypes; S.fmod = m.fmod; setSnap = JSON.stringify([S.folders, S.ftypes]); store.set("jrn1-set", JSON.stringify(S)); if (desk) applySide(); if (mode === "cartelle") renderDirs(); renderFeedKeep(); }
 async function syncPump() {
@@ -1353,7 +1382,7 @@ async function syncPump() {
   try { while (SQ.keys.size && RT.open) { const k = SQ.keys.values().next().value; SQ.keys.delete(k); const it = items.find((i) => ikey(i) === k); if (it && !it.demo) await rtSendItem(it); } }
   finally { SQ.pumping = false; }
 }
-function rtIndex() { rtSend({ t: "idx", list: items.filter((i) => !i.demo).map((i) => [ikey(i), i.mod || i.created]), tomb: SY.tomb, set: { folders: S.folders, ftypes: S.ftypes, fmod: S.fmod || 0 } }); }
+function rtIndex() { if (S.sync === false) return; rtSend({ t: "idx", list: items.filter((i) => !i.demo).map((i) => [ikey(i), i.mod || i.created]), tomb: SY.tomb, set: { folders: S.folders, ftypes: S.ftypes, fmod: S.fmod || 0 } }); }
 async function rtSendItem(it) {
   const P = parts(it), strip = (p) => { const o = Object.assign({}, p); delete o.blob; return o; };
   const meta = strip(it); if (it.att) meta.att = it.att.map(strip);
@@ -1391,6 +1420,8 @@ function rtRecv(data) {
   }
   let m; try { m = JSON.parse(data); } catch (e) { return; }
   if (m.t === "in") return remoteIn(m);
+  if (m.t === "syncmode") { if ((S.sync !== false) !== m.on) toggleSync(true); return; }
+  if (S.sync === false && ["idx", "want", "item", "del", "set"].includes(m.t)) { RT.rx = null; return; }
   if (m.t === "idx") {                            // al collegamento: allinea tutto nei due sensi
     applySet(m.set || {});
     let gone = 0; for (const k in m.tomb || {}) if (localDelete(k, m.tomb[k])) gone++;
@@ -1428,7 +1459,7 @@ M.control = {
     if (remoteOn()) { rtSend({ t: "in", k: "shift" }); return; }
     sound("stop");
   },
-  d1() { if (RT.msg) return RT.msg; return RT.open ? "collegato" : ""; },
+  d1() { if (RT.msg) return RT.msg; return RT.open ? (S.sync === false ? "collegato  sync spenta" : "collegato  sync attiva") : ""; },
 };
 
 /* ============ Shift ============ */
@@ -1806,7 +1837,7 @@ function layout() {
   // iOS dalla Home: se la finestra è più corta dello schermo, la zona dell'indicatore Home è già fuori dalla pagina:
   // non si aggiunge altro margine sotto (altrimenti resta un vuoto)
   const DK = !L && w >= 900 && h >= 560 && matchMedia("(pointer: fine)").matches && !/iPhone|iPad|iPod|Android/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));   // solo computer: niente modelli su telefono o tablet           // desktop: Display 2 grande, una sola barra in basso
-  if (DK !== desk) { desk = DK; document.body.classList.toggle("desk", desk); const ti = MODS.indexOf("trascrivi"); if (desk && ti < 0) MODS.splice(MODS.indexOf("control"), 0, "trascrivi"); if (!desk && ti >= 0) { MODS.splice(ti, 1); if (mode === "trascrivi") setMode("consulta"); } if (!desk) document.body.classList.remove("sdir", "scal"); else applySide(); }
+  if (DK !== desk) { desk = DK; document.body.classList.toggle("desk", desk); const ti = MODS.indexOf("trascrivi"); if (desk && ti < 0) MODS.push("trascrivi"); if (!desk && ti >= 0) { MODS.splice(ti, 1); if (mode === "trascrivi") setMode("consulta"); } if (!desk) document.body.classList.remove("sdir", "scal"); else applySide(); }
   const gap = (L ? sw : sh) - window.innerHeight;
   app.style.paddingBottom = navigator.standalone && !L && gap > 30 ? "0px" : "";
   if (L !== land) {
@@ -1877,15 +1908,14 @@ document.addEventListener("keydown", (e) => {
   else if (k === "ArrowRight" || k === "ArrowLeft") { e.preventDefault(); cycle(k === "ArrowRight" ? 1 : -1); }
   else if (k === "Enter") { M[mode].shift && M[mode].shift(); }
   else if (k === " ") { e.preventDefault(); M[mode].center && M[mode].center(); }
-  else if (k === KEYS.fold) { desk ? deskFold() : ringMode(FOLD); }
-  else if (k === KEYS.mod) { if (!e.repeat) { modT = setTimeout(() => { modT = -1; sound("act"); exportAll(); }, 650); } return; }
+  else if (k === KEYS.fold || k === KEYS.mod) { if (!e.repeat) { const w = k === KEYS.fold ? "fold" : "mod"; $(w === "fold" ? "bfold" : "bmod").classList.add("down"); btnDown(w); } return; }
   else if (k === "Escape") { if (inDetail) closeDetail(); else setMode("consulta"); }
   d1();
 });
 let modT = 0;
 document.addEventListener("keyup", (e) => {
   if (e.key === KEYS.shift) kbShiftUp();
-  else if ((e.key.length === 1 ? e.key.toLowerCase() : e.key) === KEYS.mod && !edOn()) { if (modT !== -1) { clearTimeout(modT); ringMode(MODS); } modT = 0; }
+  else { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if ((k === KEYS.fold || k === KEYS.mod) && !edOn()) { const w = k === KEYS.fold ? "fold" : "mod"; $(w === "fold" ? "bfold" : "bmod").classList.remove("down"); btnUp(w); } }
 });
 window.addEventListener("blur", kbShiftUp);
 let wAcc = 0;

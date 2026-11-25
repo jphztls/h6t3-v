@@ -1224,7 +1224,7 @@ M.trascrivi = {
   sdial() { if (TR.busy) return false; S.ocrEngine = S.ocrEngine === "vl" ? "ocr" : "vl"; saveS(); d1(); return true; },   // motore per le scansioni
   center() { this.shift(); },
   async shift() {
-    const it = cur(); if (TR.busy || !it) { sound("stop"); return; }
+    const it = cur(); if (TR.busy || !it || !desk) { sound("stop"); return; }
     const L = transParts(it); if (!L.length) { flash("Niente da trascrivere"); sound("stop"); return; }
     TR.busy = true; sound("act"); const out = [];
     try {
@@ -1773,7 +1773,7 @@ function layout() {
   const w = window.innerWidth, h = window.innerHeight, L = w > h && h < 520;
   // iOS dalla Home: se la finestra è più corta dello schermo, la zona dell'indicatore Home è già fuori dalla pagina:
   // non si aggiunge altro margine sotto (altrimenti resta un vuoto)
-  const DK = !L && w >= 900 && h >= 560;           // desktop: Display 2 grande, una sola barra in basso
+  const DK = !L && w >= 900 && h >= 560 && matchMedia("(pointer: fine)").matches && !/iPhone|iPad|iPod|Android/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));   // solo computer: niente modelli su telefono o tablet           // desktop: Display 2 grande, una sola barra in basso
   if (DK !== desk) { desk = DK; document.body.classList.toggle("desk", desk); const ti = MODS.indexOf("trascrivi"); if (desk && ti < 0) MODS.splice(MODS.indexOf("control"), 0, "trascrivi"); if (!desk && ti >= 0) { MODS.splice(ti, 1); if (mode === "trascrivi") setMode("consulta"); } if (!desk) document.body.classList.remove("sdir", "scal"); else applySide(); }
   const gap = (L ? sw : sh) - window.innerHeight;
   app.style.paddingBottom = navigator.standalone && !L && gap > 30 ? "0px" : "";

@@ -57,7 +57,7 @@ async function loadAsr() {
   else asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-small", { dtype: "q8", progress_callback: prog("audio") });
   return asr;
 }
-const HALL = /^(sottotitoli( creati)? (a cura|dalla comunità)|grazie (a tutti )?per (la visione|l'ascolto)|amara\.org)/i;
+const HALL = /^(sottotitoli( creati)? (a cura|dalla comunità)|grazie (a tutti )?per (la visione|l'ascolto)|grazie a tutti\.?$|amara\.org)/i;   // frasi che Whisper inventa sul silenzio
 async function stt(pcm) {
   const p = await loadAsr();
   const r = await p(pcm, { language: "italian", task: "transcribe", chunk_length_s: 30, stride_length_s: 5 });

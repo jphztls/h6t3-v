@@ -52,7 +52,7 @@ let asr = null;
 async function loadAsr() {
   if (asr) return asr;
   await caps();
-  if (gpu && f16) asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-large-v3-turbo", { device: "webgpu", dtype: { encoder_model: "fp16", decoder_model_merged: "q4" }, progress_callback: prog("audio") });
+  if (gpu && f16) asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-large-v3-turbo", { device: "webgpu", dtype: { encoder_model: "q4f16", decoder_model_merged: "q4f16" }, progress_callback: prog("audio") });
   else if (gpu) asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-large-v3-turbo", { device: "webgpu", dtype: { encoder_model: "q4", decoder_model_merged: "q4" }, progress_callback: prog("audio") });
   else asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-small", { dtype: "q8", progress_callback: prog("audio") });
   return asr;
@@ -64,10 +64,13 @@ async function stt(pcm) {
   return (r.text || "").split(/(?<=[.!?])\s+/).filter((s) => !HALL.test(s.trim())).join(" ").trim();
 }
 
+async function retry(fn) {                        // download lunghi: se la rete cade riprova (i file già finiti restano in cache)
+  for (let i = 0; ; i++) { try { return await fn(); } catch (e) { if (i >= 2 || !/network|fetch|load/i.test(String(e && e.message))) throw e; postMessage({ type: "load", what: "riprovo", loaded: i + 1, total: 3 }); await new Promise((r) => setTimeout(r, 3000)); } }
+}
 self.onmessage = async (e) => {
   const { id, kind, blob, pcm, engine } = e.data;
   try {
-    const text = kind === "image" ? await ocr(blob, engine || "ocr") : await stt(pcm);
+    const text = kind === "image" ? await retry(() => ocr(blob, engine || "ocr")) : await retry(() => stt(pcm));
     postMessage({ type: "done", id, text });
   } catch (err) { postMessage({ type: "error", id, error: String((err && err.message) || err) }); }
 };

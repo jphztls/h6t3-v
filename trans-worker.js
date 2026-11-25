@@ -27,7 +27,7 @@ async function loadVlm(key) {
   if (!gpu) throw new Error("serve WebGPU (Chrome o Safari recenti)");
   const m = MODELS[key];
   const processor = await AutoProcessor.from_pretrained(m.id, { progress_callback: prog("scansioni") });
-  const model = await AutoModelForImageTextToText.from_pretrained(m.id, { dtype: f16 ? m.dtype : { embed_tokens: "q4", vision_encoder: "q4", decoder_model_merged: "q4" }, device: "webgpu", progress_callback: prog("scansioni") });
+  const model = await AutoModelForImageTextToText.from_pretrained(m.id, { dtype: f16 ? m.dtype : { embed_tokens: "q4", vision_encoder: "q4", decoder_model_merged: "q4" }, device: "webgpu", use_external_data_format: true, progress_callback: prog("scansioni") });   // i pesi stanno in file .onnx_data separati
   vlm = { processor, model, m }; vlmKey = key; return vlm;
 }
 async function readImage(blob) {

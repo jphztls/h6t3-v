@@ -374,7 +374,7 @@ function mech(down, big) {
 /* ============ Modalità ============ */
 const VIEW = ["consulta", "cartelle", "calendario", "archivio", "elimina", "edit"];
 const CAP = ["registra", "foto", "scansione", "file", "testo"];
-const LABEL = { consulta: "", calendario: "CAL", cartelle: "DIR", edit: "EDIT", elimina: "DEL", archivio: "SET", registra: "REC", foto: "CAM", scansione: "SCAN", file: "FILE", testo: "TEXT" };
+const LABEL = { consulta: "", calendario: "CAL", cartelle: "DIR", edit: "EDIT", elimina: "DEL", archivio: "SET", trascrivi: "TRANS", registra: "REC", foto: "CAM", scansione: "SCAN", file: "FILE", testo: "TEXT" };
 const M = {};                                         // gestori: enter, leave, dial, sdial, center, shift, d1
 let mode = VIEW.includes(S.mode) || CAP.includes(S.mode) ? S.mode : "consulta";
 function setMode(k) {
@@ -1189,6 +1189,54 @@ M.testo = {
   d1() { return desk ? "" : "ruota il telefono"; },
 };
 
+/* ---- TRASCRIVI (solo desktop): scansioni e audio → file di testo aggiunto alla nota ---- */
+// I modelli si scaricano una volta da huggingface.co dentro trans-worker.js; i file non lasciano mai il computer.
+let TW = null, twId = 0; const twCb = {}, TR = { busy: false, msg: "" }, ENGINES = { ocr: "GLM-OCR", vl: "Qwen3-VL" };
+function tw() {
+  if (TW) return TW;
+  TW = new Worker("trans-worker.js", { type: "module" });
+  TW.onmessage = (e) => { const m = e.data; if (m.type === "load") { TR.msg = "scarico " + m.what + " " + Math.round((m.loaded / m.total) * 100) + "%"; d1(); } else { const cb = twCb[m.id]; delete twCb[m.id]; if (cb) cb(m); } };
+  TW.onerror = () => { for (const k in twCb) { twCb[k]({ type: "error", error: "worker non avviato" }); delete twCb[k]; } TW = null; };
+  return TW;
+}
+const twRun = (data, tr) => new Promise((res, rej) => { const id = ++twId; twCb[id] = (m) => (m.type === "done" ? res(m.text) : rej(new Error(m.error))); tw().postMessage(Object.assign({ id }, data), tr || []); });
+async function pcm16k(blob) {                     // audio → mono 16 kHz per Whisper
+  const ac = new (window.AudioContext || window.webkitAudioContext)(), buf = await ac.decodeAudioData(await blob.arrayBuffer()); ac.close();
+  const oc = new OfflineAudioContext(1, Math.ceil(buf.duration * 16000), 16000), src = oc.createBufferSource(); src.buffer = buf; src.connect(oc.destination); src.start();
+  return (await oc.startRendering()).getChannelData(0);
+}
+const transParts = (it) => parts(it).filter((p) => p.type === "image" || p.type === "audio");
+M.trascrivi = {
+  dial(d) { return setSel(sel + d); },
+  sdial() { if (TR.busy) return false; S.ocrEngine = S.ocrEngine === "vl" ? "ocr" : "vl"; saveS(); d1(); return true; },   // motore per le scansioni
+  center() { this.shift(); },
+  async shift() {
+    const it = cur(); if (TR.busy || !it) { sound("stop"); return; }
+    const L = transParts(it); if (!L.length) { flash("Niente da trascrivere"); sound("stop"); return; }
+    TR.busy = true; sound("act"); const out = [];
+    try {
+      for (let i = 0; i < L.length; i++) {
+        const p = L[i]; TR.msg = it.name + "  " + (i + 1) + "/" + L.length + " " + (p.type === "audio" ? "audio" : "pagina"); d1();
+        let t;
+        if (p.type === "audio") { const pcm = await pcm16k(p.blob); t = await twRun({ kind: "audio", pcm }, [pcm.buffer]); }
+        else t = await twRun({ kind: "image", blob: p.blob, engine: S.ocrEngine || "ocr" });
+        if (t) out.push(t);
+      }
+      const txt = out.join("\n\n");
+      if (!txt.trim()) flash("Nessun testo trovato");
+      else { (it.att = it.att || []).push({ type: "text", ext: "txt", mime: "text/plain", text: txt }); await dbPut(it); renderFeedKeep(); flash("Trascritto " + it.name); sound("set"); }
+    } catch (e) { flash("Errore: " + e.message); sound("stop"); }
+    TR.busy = false; TR.msg = ""; d1();
+  },
+  d1() {
+    if (TR.busy) return TR.msg;
+    const it = cur(); if (!it) return "";
+    const L = transParts(it), ni = L.filter((p) => p.type === "image").length, na = L.length - ni;
+    if (!L.length) return it.name + "  niente da trascrivere";
+    return it.name + "  " + [ni ? ni + (ni === 1 ? " pagina" : " pagine") : "", na ? na + " audio" : ""].filter(Boolean).join(" ") + (ni ? "  " + ENGINES[S.ocrEngine || "ocr"] : "");
+  },
+};
+
 /* ============ Shift ============ */
 const shiftB = $("shift"); let shId = null, shT = 0, shUsed = false;
 shiftB.addEventListener("pointerdown", (e) => {
@@ -1564,7 +1612,7 @@ function layout() {
   // iOS dalla Home: se la finestra è più corta dello schermo, la zona dell'indicatore Home è già fuori dalla pagina:
   // non si aggiunge altro margine sotto (altrimenti resta un vuoto)
   const DK = !L && w >= 900 && h >= 560;           // desktop: Display 2 grande, una sola barra in basso
-  if (DK !== desk) { desk = DK; document.body.classList.toggle("desk", desk); if (!desk) document.body.classList.remove("sdir", "scal"); else applySide(); }
+  if (DK !== desk) { desk = DK; document.body.classList.toggle("desk", desk); const ti = MODS.indexOf("trascrivi"); if (desk && ti < 0) MODS.push("trascrivi"); if (!desk && ti >= 0) { MODS.splice(ti, 1); if (mode === "trascrivi") setMode("consulta"); } if (!desk) document.body.classList.remove("sdir", "scal"); else applySide(); }
   const gap = (L ? sw : sh) - window.innerHeight;
   app.style.paddingBottom = navigator.standalone && !L && gap > 30 ? "0px" : "";
   if (L !== land) {

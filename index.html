@@ -271,7 +271,8 @@ const ink = () => getComputedStyle(document.documentElement).getPropertyValue("-
 
 const S = { mode: "consulta", lastCap: "registra", theme: "dark", sound: "1", filter: null, folders: ["memo", "idee", "journal", "agenda", "lavoro"], ftypes: {}, scanFilter: "migliorato" };
 try { Object.assign(S, JSON.parse(store.get("jrn1-set", "{}"))); } catch (e) {}
-const saveS = () => store.set("jrn1-set", JSON.stringify(S));
+const saveS = () => { store.set("jrn1-set", JSON.stringify(S)); if (typeof syncSet === "function") syncSet(); };
+syncSet();                                          // fotografia iniziale di cartelle e tipi
 document.documentElement.dataset.theme = S.theme;
 
 /* ============ Archivio interno: IndexedDB, solo sul telefono ============ */
@@ -285,9 +286,13 @@ function idb() {
 }
 const tx = (mode, fn) => new Promise((res, rej) => { const t = db.transaction("items", mode), s = t.objectStore("items"); const out = fn(s); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); });
 const dbAll = () => tx("readonly", (s) => s.getAll());
-const dbPut = (it) => tx("readwrite", (s) => s.put(it));
-const dbDel = (name) => tx("readwrite", (s) => s.delete(name));
-const dbClear = () => tx("readwrite", (s) => s.clear());
+/* Ogni modifica passa da qui: data di modifica e, se l'iPhone e il computer sono collegati, invio all'altro */
+const SY = { applying: false, tomb: {} };          // tomb: note eliminate (chiave → quando), per propagare le eliminazioni
+try { SY.tomb = JSON.parse(store.get("jrn1-tomb", "{}")); } catch (e) {}
+const ikey = (it) => it.created + "|" + it.type;
+const dbPut = (it) => { if (!SY.applying) { it.mod = Date.now(); if (!it.demo) syncLater(ikey(it)); } return tx("readwrite", (s) => s.put(it)); };
+const dbDel = (name) => { const it = items.find((i) => i.name === name); if (it && !it.demo && !SY.applying) { const k = ikey(it); SY.tomb[k] = Date.now(); store.set("jrn1-tomb", JSON.stringify(SY.tomb)); syncDel(k); } return tx("readwrite", (s) => s.delete(name)); };
+const dbClear = () => { if (!SY.applying) { for (const it of items) if (!it.demo) { SY.tomb[ikey(it)] = Date.now(); syncDel(ikey(it)); } store.set("jrn1-tomb", JSON.stringify(SY.tomb)); } return tx("readwrite", (s) => s.clear()); };
 
 let items = [];                                       // dal più recente al più vecchio
 const pad = (n, l) => String(n).padStart(l || 2, "0");
@@ -1283,7 +1288,7 @@ function newPc() {
 }
 function useDc(dc) {
   RT.dc = dc; dc.binaryType = "arraybuffer";
-  dc.onopen = () => { RT.open = true; camStop(); showLink(""); rtStatus(""); sound("set"); if (mode === "control") showPane("feed"); };
+  dc.onopen = () => { RT.open = true; camStop(); showLink(""); rtStatus(""); sound("set"); rtIndex(); if (mode === "control") showPane("feed"); };
   dc.onclose = () => { RT.open = false; d1(); };
   dc.onmessage = (e) => rtRecv(e.data);
 }
@@ -1333,42 +1338,70 @@ async function pairStart() {
 /* --- dati: JSON per i messaggi, ArrayBuffer per i file --- */
 function rtSend(o) { if (RT.open) try { RT.dc.send(JSON.stringify(o)); } catch (e) {} }
 async function rtSendBuf(ab) { for (let o = 0; o < ab.byteLength; o += 65536) { while (RT.dc.bufferedAmount > 4e6) await new Promise((r) => setTimeout(r, 15)); RT.dc.send(ab.slice(o, o + 65536)); } }
-const ikey = (it) => it.created + "|" + it.type;
-function rtIndex() { rtSend({ t: "idx", keys: items.filter((i) => !i.demo).map(ikey) }); }
-async function rtSendItems(keys) {
-  const L = items.filter((i) => keys.includes(ikey(i)));
-  for (let n = 0; n < L.length; n++) {
-    const it = L[n], P = parts(it), strip = (p) => { const o = Object.assign({}, p); delete o.blob; return o; };
-    const meta = strip(it); if (it.att) meta.att = it.att.map(strip);
-    const blobs = P.map((p, i) => (p.blob ? { i, size: p.blob.size, mime: p.blob.type || p.mime } : null)).filter(Boolean);
-    rtStatus("invio " + (n + 1) + "/" + L.length);
-    rtSend({ t: "item", meta, blobs, ftype: it.folder ? S.ftypes[it.folder] : undefined });
-    for (const b of blobs) await rtSendBuf(await P[b.i].blob.arrayBuffer());
-  }
-  rtSend({ t: "end", n: L.length }); rtStatus("");
+/* --- sincronizzazione automatica nei due sensi, finché sono collegati --- */
+const SQ = { keys: new Set(), dels: new Set(), t: 0, pumping: false };
+function syncLater(k) { if (!RT.open) return; SQ.keys.add(k); clearTimeout(SQ.t); SQ.t = setTimeout(syncPump, 400); }
+function syncDel(k) { if (!RT.open) return; SQ.keys.delete(k); rtSend({ t: "del", key: k, at: SY.tomb[k] || Date.now() }); }
+var setSnap;
+function syncSet() {                               // cartelle e tipi: vince l'ultima modifica
+  const snap = JSON.stringify([S.folders, S.ftypes]); if (setSnap === undefined) { setSnap = snap; return; } if (snap === setSnap) return;
+  setSnap = snap; S.fmod = Date.now(); store.set("jrn1-set", JSON.stringify(S)); if (RT.open) rtSend({ t: "set", folders: S.folders, ftypes: S.ftypes, fmod: S.fmod });
+}
+function applySet(m) { if ((m.fmod || 0) <= (S.fmod || 0)) return; S.folders = m.folders; S.ftypes = m.ftypes; S.fmod = m.fmod; setSnap = JSON.stringify([S.folders, S.ftypes]); store.set("jrn1-set", JSON.stringify(S)); if (desk) applySide(); if (mode === "cartelle") renderDirs(); renderFeedKeep(); }
+async function syncPump() {
+  if (SQ.pumping || !RT.open) return; SQ.pumping = true;
+  try { while (SQ.keys.size && RT.open) { const k = SQ.keys.values().next().value; SQ.keys.delete(k); const it = items.find((i) => ikey(i) === k); if (it && !it.demo) await rtSendItem(it); } }
+  finally { SQ.pumping = false; }
+}
+function rtIndex() { rtSend({ t: "idx", list: items.filter((i) => !i.demo).map((i) => [ikey(i), i.mod || i.created]), tomb: SY.tomb, set: { folders: S.folders, ftypes: S.ftypes, fmod: S.fmod || 0 } }); }
+async function rtSendItem(it) {
+  const P = parts(it), strip = (p) => { const o = Object.assign({}, p); delete o.blob; return o; };
+  const meta = strip(it); if (it.att) meta.att = it.att.map(strip);
+  const blobs = P.map((p, i) => (p.blob ? { i, size: p.blob.size, mime: p.blob.type || p.mime } : null)).filter(Boolean);
+  rtSend({ t: "item", meta, blobs });
+  for (const b of blobs) await rtSendBuf(await P[b.i].blob.arrayBuffer());
+}
+function localDelete(k, at) {
+  if (!SY.tomb[k] || SY.tomb[k] < at) { SY.tomb[k] = at; store.set("jrn1-tomb", JSON.stringify(SY.tomb)); }
+  const it = items.find((i) => ikey(i) === k); if (!it || (it.mod || it.created) > at) return false;
+  SY.applying = true; dbDel(it.name).finally(() => (SY.applying = false)); items.splice(items.indexOf(it), 1); if (player && player.it === it) tapeStop();
+  return true;
 }
 let rtRefresh = 0;
-async function rtImport(meta, blobs, chunks, ftype) {
-  if (items.some((i) => ikey(i) === ikey(meta))) return;
-  const P = [meta].concat(meta.att || []); blobs.forEach((b, k) => { P[b.i].blob = new Blob(chunks[k], { type: b.mime }); });
-  const pre = (meta.name || "").slice(0, 6); if (!/^\d{6}$/.test(pre) || items.some((i) => i.name === meta.name)) meta.name = nextName(/^\d{6}$/.test(pre) ? ymdDate(pre) : new Date(meta.created));
-  if (meta.folder && !S.folders.includes(meta.folder)) { S.folders.push(meta.folder); if (ftype) S.ftypes[meta.folder] = ftype; saveS(); }
-  items.push(meta); await dbPut(meta); sortItems();
-  clearTimeout(rtRefresh); rtRefresh = setTimeout(renderFeedKeep, 300);
+let importChain = Promise.resolve();
+const rtImport = (m, b, c) => (importChain = importChain.then(() => rtImport1(m, b, c)).catch((e) => console.error(e)));   // una alla volta: nomi sempre unici
+async function rtImport1(meta, blobs, chunks) {
+  const k = ikey(meta), mod = meta.mod || meta.created;
+  if (SY.tomb[k] && SY.tomb[k] >= mod) return;                       // eliminata qui dopo l'ultima modifica di là
+  const P = [meta].concat(meta.att || []); blobs.forEach((b, j) => { P[b.i].blob = new Blob(chunks[j], { type: b.mime }); });
+  const old = items.find((i) => ikey(i) === k);
+  if (old && (old.mod || old.created) >= mod) return;                  // qui è già più recente
+  if (old) meta.name = old.name;                                       // stessa nota: tiene il nome che ha qui
+  else { const pre = (meta.name || "").slice(0, 6); if (!/^\d{6}$/.test(pre) || items.some((i) => i.name === meta.name)) meta.name = nextName(/^\d{6}$/.test(pre) ? ymdDate(pre) : new Date(meta.created)); }
+  if (meta.folder && !S.folders.includes(meta.folder)) { S.folders.push(meta.folder); setSnap = JSON.stringify([S.folders, S.ftypes]); store.set("jrn1-set", JSON.stringify(S)); }
+  if (old) { const i = items.indexOf(old); items[i] = meta; if (player && player.it === old) tapeStop(); } else items.push(meta);
+  SY.applying = true; try { await dbPut(meta); } finally { SY.applying = false; }
+  sortItems(); clearTimeout(rtRefresh); rtRefresh = setTimeout(() => { renderFeedKeep(); if (mode === "calendario" || document.body.classList.contains("scal")) renderCal(); if (mode === "cartelle" || document.body.classList.contains("sdir")) renderDirs(); d1(); }, 250);
 }
 function rtRecv(data) {
   if (typeof data !== "string") {                // pezzo di file dell'elemento in arrivo
     const r = RT.rx; if (!r) return; const b = r.blobs[r.k]; (r.chunks[r.k] = r.chunks[r.k] || []).push(data); r.got += data.byteLength;
-    if (r.got >= b.size) { r.k++; r.got = 0; if (r.k >= r.blobs.length) { RT.rx = null; rtImport(r.meta, r.blobs, r.chunks, r.ftype); } }
+    if (r.got >= b.size) { r.k++; r.got = 0; if (r.k >= r.blobs.length) { RT.rx = null; rtImport(r.meta, r.blobs, r.chunks); } }
     return;
   }
   let m; try { m = JSON.parse(data); } catch (e) { return; }
   if (m.t === "in") return remoteIn(m);
-  if (m.t === "sync") return rtIndex();
-  if (m.t === "idx") { const have = new Set(items.map(ikey)), want = m.keys.filter((k) => !have.has(k)); rtSend({ t: "want", keys: want }); RT.recvN = want.length; RT.recvI = 0; if (want.length) rtStatus("ricevo 0/" + want.length); return; }
-  if (m.t === "want") { if (!RT.busy) { RT.busy = true; rtSendItems(m.keys).finally(() => (RT.busy = false)); } return; }
-  if (m.t === "item") { RT.recvI = (RT.recvI || 0) + 1; if (RT.recvN) rtStatus("ricevo " + RT.recvI + "/" + RT.recvN); if (!m.blobs.length) rtImport(m.meta, [], [], m.ftype); else RT.rx = { meta: m.meta, blobs: m.blobs, chunks: [], k: 0, got: 0, ftype: m.ftype }; return; }
-  if (m.t === "end") { if (RT.recvN) { flash("Ricevute " + RT.recvN + " note"); RT.recvN = 0; } setTimeout(() => rtStatus(""), 50); }
+  if (m.t === "idx") {                            // al collegamento: allinea tutto nei due sensi
+    applySet(m.set || {});
+    let gone = 0; for (const k in m.tomb || {}) if (localDelete(k, m.tomb[k])) gone++;
+    const mine = new Map(items.map((i) => [ikey(i), i.mod || i.created])), want = m.list.filter(([k, md]) => !(SY.tomb[k] >= md) && !(mine.get(k) >= md)).map(([k]) => k);
+    rtSend({ t: "want", keys: want }); if (gone) { renderFeedKeep(); flash("Eliminate " + gone + " note"); }
+    return;
+  }
+  if (m.t === "want") { m.keys.forEach((k) => SQ.keys.add(k)); syncPump(); return; }
+  if (m.t === "item") { if (!m.blobs.length) rtImport(m.meta, [], []); else RT.rx = { meta: m.meta, blobs: m.blobs, chunks: [], k: 0, got: 0 }; return; }
+  if (m.t === "del") { if (localDelete(m.key, m.at)) { renderFeedKeep(); d1(); } return; }
+  if (m.t === "set") return applySet(m);
 }
 function remoteIn(m) {                            // comandi dall'iPhone usato come telecomando
   audio();
@@ -1393,10 +1426,9 @@ M.control = {
   center() { if (remoteOn()) rtSend({ t: "in", k: "center" }); else if (!RT.open) pairStart(); },
   shift() {
     if (remoteOn()) { rtSend({ t: "in", k: "shift" }); return; }
-    if (RT.open && desk) { rtSend({ t: "sync" }); rtIndex(); rtStatus("sincronizzo..."); sound("act"); return; }
     sound("stop");
   },
-  d1() { if (RT.msg) return RT.msg; return RT.open ? (desk ? "collegato  Shift: sincronizza" : "collegato") : ""; },
+  d1() { if (RT.msg) return RT.msg; return RT.open ? "collegato" : ""; },
 };
 
 /* ============ Shift ============ */
@@ -1925,9 +1957,9 @@ async function demo() {                        // voci di esempio solo al primis
   c.strokeRect(150, 380, 260, 150); c.beginPath(); c.arc(640, 450, 80, 0, 7); c.stroke();
   const img = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.8));
   const list = [
-    { name: d1s + "_1", type: "text", ext: "txt", mime: "text/plain", text: "Idea: un archivio unico per mese, uno ZIP che si apre ovunque.", created: +y - 3600e3, folder: "idee" },
-    { name: d1s + "_2", type: "image", ext: "jpg", mime: "image/jpeg", blob: img, created: +y },
-    { name: d0 + "_1", type: "text", ext: "txt", mime: "text/plain", text: "Giornata lunga. Domani chiamare per lo studio alle 10.\nRicordarsi di portare i disegni.", created: +now - 7200e3, folder: "journal" },
+    { name: d1s + "_1", type: "text", ext: "txt", mime: "text/plain", text: "Idea: un archivio unico per mese, uno ZIP che si apre ovunque.", created: +y - 3600e3, folder: "idee", demo: true },
+    { name: d1s + "_2", type: "image", ext: "jpg", mime: "image/jpeg", blob: img, created: +y, demo: true },
+    { name: d0 + "_1", type: "text", ext: "txt", mime: "text/plain", text: "Giornata lunga. Domani chiamare per lo studio alle 10.\nRicordarsi di portare i disegni.", created: +now - 7200e3, folder: "journal", demo: true },
   ];
   for (const it of list) { await dbPut(it); items.push(it); }
 }
@@ -1935,6 +1967,10 @@ bmInit();
 (async () => {
   try { db = await idb(); items = await dbAll(); if (!items.length && store.get("jrn1-demo", "") !== "1") { store.set("jrn1-demo", "1"); await demo(); } }
   catch (e) { flash("Memoria non disponibile"); }
+  {                                                // le 3 note di esempio del primo avvio sono esempi anche loro
+    const idea = items.find((i) => !i.demo && i.type === "text" && i.text === "Idea: un archivio unico per mese, uno ZIP che si apre ovunque.");
+    for (const it of items) if (!it.demo && ((it.type === "text" && (it === idea || it.text === "Giornata lunga. Domani chiamare per lo studio alle 10.\nRicordarsi di portare i disegni.")) || (idea && it.type === "image" && Math.abs(it.created - idea.created - 3600e3) < 5000))) { it.demo = true; SY.applying = true; await dbPut(it); SY.applying = false; }
+  }
   sortItems(); S.filter = null; layout(); renderFeed();
   if (store.get("jrn1-demo2", "") !== "1" && !items.some((i) => i.demo)) { try { await demoMany(); store.set("jrn1-demo2", "1"); } catch (e) { console.error(e); } }   // una volta sola (se la pagina si ricarica a metà, riprova)
   const m = mode; mode = "consulta"; if (m !== "consulta" && m !== "foto" && m !== "scansione") setMode(m); else d1();

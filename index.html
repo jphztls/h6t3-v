@@ -58,7 +58,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 .it .imgs { display: flex; flex-wrap: wrap; gap: 6px; }   /* feed: immagini piccole, affiancate */
 .it .imgs img { width: auto; height: 140px; max-width: 100%; max-height: none; object-fit: contain; }
 .it img.scan { width: 100%; height: auto; max-height: none; }   /* scansioni sempre larghe come il Display 2 */
-.it .ev { font-variant-numeric: tabular-nums; }
+.it .ev { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .it.same { border-top: 0; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 4px) top left / 100% 1px no-repeat; }   /* stesso giorno: tratteggio 2px 2px */
 .it .tx { white-space: pre-wrap; word-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .it img { display: block; width: 100%; max-height: 260px; object-fit: contain; object-position: left center; }
@@ -203,7 +203,7 @@ body.desk #d2 { grid-column: 1 / 3; grid-row: 1; margin: 0; min-height: 0; displ
 body.desk.sdir #d2, body.desk.scal #d2 { grid-template-columns: minmax(0, 1fr) 325px; }
 body.desk #d2 > .pane { position: relative; inset: auto; min-height: 0; }
 body.desk #d2 > .pane.on { grid-column: 1; grid-row: 1 / 3; }
-body.desk #cal, body.desk #dirs { display: none; grid-column: 2; border-left: 1px solid var(--line); margin-left: 24px; padding: 0 0 0 24px; }
+body.desk #cal, body.desk #dirs { display: none; grid-column: 2; margin-left: 48px; padding: 0; }
 body.desk #cal { grid-row: 1; padding-bottom: 32px; }
 body.desk #dirs { grid-row: 2; }
 body.desk.sdir:not(.scal) #dirs { grid-row: 1 / 3; }
@@ -851,6 +851,7 @@ function arcRows() {
     { k: "expY", l: "esporta anno " + mon.slice(0, 2) },
     { k: "expA", l: "esporta tutto" },
     { k: "imp", l: "apri archivio ZIP" },
+    { k: "demo", l: items.some((i) => i.demo) ? "togli note di esempio" : "aggiungi note di esempio" },
     { k: "sound", l: "suono " + (S.sound === "1" ? "on" : "off") },
     { k: "clear", l: arcConfirm ? "cancella tutto: conferma?" : "cancella tutto" },
   ];
@@ -867,6 +868,7 @@ M.archivio = {
       const pre = r.k === "expA" ? "" : (it ? it.name : ymd(new Date())).slice(0, r.k === "expM" ? 4 : 2);
       sound("act"); if (!pre) { S.lastExp = Date.now(); saveS(); } await exportZip(items.filter((x) => x.name.startsWith(pre)), "JRN-1_" + (pre || "tutto") + ".zip");
     } else if (r.k === "imp") { sound("set"); $("fzip").click(); }
+    else if (r.k === "demo") { if (items.some((i) => i.demo)) { const n = await demoClear(); flash("Tolte " + n + " note"); } else { const n = await demoMany(); flash("Aggiunte " + n + " note"); } sound("act"); }
     else if (r.k === "sound") { S.sound = S.sound === "1" ? "0" : "1"; saveS(); if (S.sound === "1") { audio(); sound("set"); } }
     else if (r.k === "clear") { await dbClear(); items = []; sel = 0; renderFeed(); flash("Archivio vuoto"); sound("act"); }
     d1();
@@ -1706,6 +1708,51 @@ $("app").addEventListener("wheel", (e) => {      // rotella = ghiera, Shift + ro
   d1();
 }, { passive: false });
 
+
+/* Note di esempio (segnate demo: si tolgono da SET) */
+async function demoClear() {
+  const L = items.filter((i) => i.demo); for (const it of L) await dbDel(it.name);
+  items = items.filter((i) => !i.demo); sel = 0; renderFeed(); return L.length;
+}
+async function demoMany() {
+  let seed = 20261125; const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }, pick = (a) => a[Math.floor(rnd() * a.length)];
+  for (const [f, t] of [["spesa", "tasklist"], ["agenda", "calendar"], ["lavoro", "generica"]]) { if (!S.folders.includes(f)) S.folders.push(f); if (!S.ftypes[f] && t !== "generica") S.ftypes[f] = t; }
+  saveS();
+  const TXT = ["Chiamare lo studio per la pianta del piano terra.\nPortare i disegni aggiornati.", "Idea: una copertina tutta nera con il titolo in basso a sinistra.", "Giornata lenta. Ho riletto gli appunti di ottobre e riordinato la scrivania.", "Libro: rileggere il capitolo sulla luce naturale.", "Ricetta: pasta con ceci, rosmarino e pepe.", "Pensiero: meno oggetti, più spazio vuoto.", "Riunione rinviata a giovedì alle 15.", "Comprare una lampada da tavolo con luce calda.", "Sogno strano: una casa con le scale che non finivano.", "Ascoltare di nuovo quel disco ambient del '78.", "Bozza mail al fornitore: chiedere tempi per le finestre.", "Misure stanza: 3,40 × 4,15 m, altezza 2,90.", "Camminata lungo il fiume, 6 km. Freddo ma bello.", "Da leggere: articolo sulle tipografie svizzere.", "Note sul progetto: ridurre i materiali a tre.", "Telefonata con la mamma. Domenica pranzo da lei."];
+  const TASK = ["Latte", "Pane", "Carta A4", "Batterie AA", "Caffè", "Detersivo", "Mele", "Quaderno a quadretti", "Nastro adesivo", "Lampadina E27"];
+  const EV = ["Dentista", "Riunione studio", "Cena con Marco", "Consegna tavole", "Palestra", "Treno per Milano", "Chiamata cliente"];
+  const sketch = async (kind) => {
+    const cv = document.createElement("canvas"), W = kind === "scan" ? 840 : 900, H = kind === "scan" ? 1180 : 600; cv.width = W; cv.height = H; const c = cv.getContext("2d");
+    c.fillStyle = kind === "scan" ? "#fff" : "#f2efe8"; c.fillRect(0, 0, W, H); c.strokeStyle = "#222"; c.lineWidth = kind === "scan" ? 2.5 : 3; c.lineCap = "round";
+    if (kind === "scan") { for (let i = 0; i < 26; i++) { const y = 90 + i * 40, x0 = 70 + rnd() * 20, x1 = W - 80 - rnd() * (i % 5 === 4 ? 400 : 60); c.beginPath(); c.moveTo(x0, y); for (let x = x0; x < x1; x += 14) c.lineTo(x, y + Math.sin(x * 0.3 + i) * 5 - rnd() * 6); c.stroke(); } }
+    else { for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(150 + rnd() * 600, 120 + rnd() * 360, 30 + rnd() * 90, 0, 7); c.stroke(); } c.strokeRect(100 + rnd() * 200, 100 + rnd() * 100, 200 + rnd() * 300, 120 + rnd() * 200); }
+    return await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.7));
+  };
+  const voice = (sec) => {                         // audio finto: sillabe di rumore filtrato, 16 kHz
+    const sr = 16000, n = Math.floor(sec * sr), b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+    let lp = 0, env = 0, syl = 0, f = 140 + rnd() * 80; const pk = new Array(160).fill(0), st = Math.ceil(n / 160);
+    for (let i = 0; i < n; i++) { if (i % 2400 === 0) syl = rnd() < 0.75 ? 0.3 + rnd() * 0.7 : 0; env += (syl - env) * 0.002; lp += ((rnd() * 2 - 1) - lp) * 0.25; const x = env * (0.6 * Math.sin((i / sr) * 2 * Math.PI * f) * (0.5 + 0.5 * Math.sin(i / 300)) + 0.5 * lp); v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x)) * 20000, true); pk[Math.floor(i / st)] = Math.max(pk[Math.floor(i / st)], Math.abs(x)); }
+    const mx = Math.max(...pk, 0.01); return { blob: new Blob([b], { type: "audio/wav" }), peaks: pk.map((x) => +(x / mx).toFixed(2)), dur: sec };
+  };
+  const now = Date.now(), out = [];
+  for (let k = 0; k < 64; k++) {
+    const day = Math.floor(k * 0.7 + rnd() * 2), d = new Date(now - day * 864e5); d.setHours(8 + Math.floor(rnd() * 13), Math.floor(rnd() * 60));
+    const r = rnd(), it = { created: +d, demo: true };
+    if (r < 0.36) Object.assign(it, { type: "text", ext: "txt", mime: "text/plain", text: pick(TXT), folder: pick([undefined, "idee", "journal", "memo", "lavoro"]) });
+    else if (r < 0.5) Object.assign(it, { type: "text", ext: "txt", mime: "text/plain", text: pick(TASK), folder: "spesa", done: rnd() < 0.4 || undefined });
+    else if (r < 0.6) { const w = new Date(+d + (1 + Math.floor(rnd() * 20)) * 864e5); w.setHours(9 + Math.floor(rnd() * 9), rnd() < 0.5 ? 0 : 30); Object.assign(it, { type: "text", ext: "txt", mime: "text/plain", text: pick(EV), folder: "agenda", when: ymd(w).replace(/(..)(..)(..)/, "20$1-$2-$3") + "T" + pad(w.getHours()) + ":" + pad(w.getMinutes()) }); }
+    else if (r < 0.72) { const a = voice(3 + Math.floor(rnd() * 14)); Object.assign(it, { type: "audio", ext: "wav", mime: "audio/wav", blob: a.blob, peaks: a.peaks, dur: a.dur, folder: pick([undefined, "memo", "idee"]) }); if (rnd() < 0.4) it.att = [{ type: "text", ext: "txt", mime: "text/plain", text: pick(TXT) }]; }
+    else if (r < 0.86) { Object.assign(it, { type: "image", ext: "jpg", mime: "image/jpeg", blob: await sketch("scan"), filter: "migliorato", folder: pick(["lavoro", "journal", undefined]) }); const np = Math.floor(rnd() * 3); if (np) it.att = []; for (let j = 0; j < np; j++) it.att.push({ type: "image", ext: "jpg", mime: "image/jpeg", blob: await sketch("scan"), filter: "migliorato" }); }
+    else { Object.assign(it, { type: "image", ext: "jpg", mime: "image/jpeg", blob: await sketch("photo"), folder: pick([undefined, "idee", "journal"]) }); if (rnd() < 0.5) it.att = [{ type: "image", ext: "jpg", mime: "image/jpeg", blob: await sketch("photo") }]; }
+    out.push(it);
+  }
+  out.sort((a, b) => a.created - b.created);
+  for (const it of out) it.name = nextName(new Date(it.created)), items.push(it);
+  await Promise.all(out.map((it) => dbPut(it)));
+  sortItems(); renderFeed(); return out.length;
+}
+
 /* ============ Avvio ============ */
 async function demo() {                        // voci di esempio solo al primissimo avvio
   const now = new Date(), d0 = ymd(now), y = new Date(now - 864e5), d1s = ymd(y);
@@ -1726,6 +1773,7 @@ bmInit();
   try { db = await idb(); items = await dbAll(); if (!items.length && store.get("jrn1-demo", "") !== "1") { store.set("jrn1-demo", "1"); await demo(); } }
   catch (e) { flash("Memoria non disponibile"); }
   sortItems(); S.filter = null; layout(); renderFeed();
+  if (store.get("jrn1-demo2", "") !== "1" && !items.some((i) => i.demo)) { try { await demoMany(); store.set("jrn1-demo2", "1"); } catch (e) { console.error(e); } }   // una volta sola (se la pagina si ricarica a metà, riprova)
   const m = mode; mode = "consulta"; if (m !== "consulta" && m !== "foto" && m !== "scansione") setMode(m); else d1();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}).finally(storageCheck); else storageCheck();
 })();

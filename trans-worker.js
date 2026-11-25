@@ -1,6 +1,7 @@
 // JRN-1 · trascrizione locale (solo desktop).
 // Questo worker scarica UNA VOLTA i modelli da huggingface.co (poi restano nella cache del browser)
 // e non invia mai i tuoi file: immagini e audio arrivano qui dalla pagina e restano in memoria.
+import "./net-guard.js";   // per primo: blocca qualsiasi invio di dati
 import { env, pipeline, AutoProcessor, AutoModelForImageTextToText, RawImage } from "./tf/transformers.min.js";
 
 env.allowLocalModels = false;
@@ -44,7 +45,7 @@ async function ocr(blob, key) {
   const inputs = await processor(text, image);
   const out = await model.generate({ ...inputs, max_new_tokens: 2048, do_sample: false, repetition_penalty: 1.05 });
   const dec = processor.batch_decode(out.slice(null, [inputs.input_ids.dims.at(-1), null]), { skip_special_tokens: true });
-  return (dec[0] || "").replace(/^```[a-z]*\n?|```$/g, "").trim();
+  return (dec[0] || "").replace(/^```[a-z]*\n?|```$/g, "").replace(/\n{2,}/g, "\n").trim();   // una riga per riga, senza righe vuote in mezzo
 }
 
 let asr = null;

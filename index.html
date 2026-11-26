@@ -2019,31 +2019,26 @@ const pxGlyph = (ch) => PXF[ch] || (ch === "\n" ? PXF["↵"] : PXF["?"]);
 const pxWidth = (ch) => pxGlyph(ch)[0];
 const pxText = (s) => { let w = 0; for (const ch of s) w += pxWidth(ch); return w; };
 function pxDraw(s, X, top, col, font) {            // X, top in pixel del display (top = riga 3 del font); torna la X finale
-  const c = BM.x, u = BM.u, gp = u >= 4 ? 1 : 0; c.fillStyle = col;   // pixel leggermente separati
+  const c = BM.x, u = BM.u, [pw, ph] = pxSize(u); c.fillStyle = col;   // pixel separati, rettangolari in orizzontale (scanline)
   for (const ch of (Array.isArray(s) ? s : [...s])) {
     const g = font === "icon" ? PXI[ch] : font === "bold" ? PXFB[ch] || pxGlyph(ch) : pxGlyph(ch), w = g[0];
-    for (let r = 0; r < BM.NR; r++) { const v = g[1 + BM.R0 + r]; if (v) for (let k = 0; k < w; k++) if ((v >> (w - 1 - k)) & 1) c.fillRect((X + k) * u, (top + r) * u, u - gp, u - gp); }
+    for (let r = 0; r < BM.NR; r++) { const v = g[1 + BM.R0 + r]; if (v) for (let k = 0; k < w; k++) if ((v >> (w - 1 - k)) & 1) c.fillRect((X + k) * u, (top + r) * u, pw, ph); }
     X += w;
   }
   return X;
 }
+const pxSize = (u) => [u - (u >= 4 ? 1 : 0), u - (u >= 4 ? 2 : u >= 2 ? 1 : 0)];   // larghezza e altezza del pixel acceso
 function bmInit() { const cv = document.createElement("canvas"); cv.id = "d1b"; $("d1").appendChild(cv); BM.cv = cv; BM.x = cv.getContext("2d"); document.body.classList.add("bmp"); }
 function drawD1() { if (drawD1raw() !== false) oled(); }
 const OL = { g: null, s: null };
-function oled() {                                 // riflesso sul vetro (copia tenue spostata) + bloom economico (riduci e allarga)
+function oled() {                                 // riflesso sul vetro (copia tenue spostata) e griglia dei pixel spenti
   const cv = BM.cv; if (!cv || !cv.width) return; const c = BM.x, W = cv.width, H = cv.height;
-  if (!OL.g) { OL.g = document.createElement("canvas"); OL.s = document.createElement("canvas"); }
-  const g = OL.g, s = OL.s; if (g.width !== W || g.height !== H) { g.width = W; g.height = H; s.width = Math.max(1, W >> 3); s.height = Math.max(1, H >> 3); }
-  if (!OL.t) OL.t = document.createElement("canvas");
-  const t = OL.t; if (t.width !== Math.max(1, W >> 4)) { t.width = Math.max(1, W >> 4); t.height = Math.max(1, H >> 4); }
-  const gx = g.getContext("2d"), sx = s.getContext("2d"), tx = t.getContext("2d");
-  gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);
-  sx.globalCompositeOperation = "copy"; sx.imageSmoothingEnabled = true; sx.drawImage(g, 0, 0, s.width, s.height);
-  tx.globalCompositeOperation = "copy"; tx.imageSmoothingEnabled = true; tx.drawImage(s, 0, 0, t.width, t.height);
-  c.save(); c.globalCompositeOperation = "lighter"; c.imageSmoothingEnabled = true;
-  c.globalAlpha = 0.16; c.drawImage(g, 0, Math.max(2, Math.round(BM.u * 1.2)));            // sdoppiamento: riflesso spostato in verticale
-  c.globalAlpha = 0.5; c.drawImage(s, 0, 0, W, H);                                            // bloom vicino
-  c.globalAlpha = 0.35; c.drawImage(t, 0, 0, W, H);                                           // bloom largo
+  if (!OL.g) OL.g = document.createElement("canvas");
+  const g = OL.g; if (g.width !== W || g.height !== H) { g.width = W; g.height = H; }
+  const gx = g.getContext("2d"); gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);
+  c.save(); c.globalCompositeOperation = "lighter";
+  c.globalAlpha = 0.16; c.drawImage(g, 0, BM.u * 3);                                          // sdoppiamento: riflesso spostato in verticale di 3 pixel (bloom tolto per ora)
+  c.globalAlpha = 1; c.fillStyle = BM.pat; c.fillRect(0, 0, Math.floor(W / BM.u) * BM.u, Math.floor(H / BM.u) * BM.u);   // pixel spenti al 10%
   c.restore();
 }
 function drawD1raw() {
@@ -2051,14 +2046,13 @@ function drawD1raw() {
   const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return false;
   if (cv.width !== Math.round(W * DPR) || cv.height !== Math.round(H * DPR)) { cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
   const inkC = "#fff", bg = "#000";               // il display resta nero anche col tema chiaro
-  const u = (BM.u = Math.max(2, Math.round((14 * DPR) / 9))), c = BM.x;   // altezza delle maiuscole circa 14px
+  const u = (BM.u = DPR >= 1.5 ? Math.max(4, Math.round((14 * DPR) / 9)) : 2), c = BM.x;   // almeno 4 px fisici per pixel: si vede la griglia
   const cols = Math.floor(cv.width / u), rows = Math.floor(cv.height / u), top = Math.floor((rows - BM.NR) / 2), pad = Math.round(10 * DPR / u);
   c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height);
-  if (!BM.pat || BM.patU !== u) {                  // pixel spenti appena visibili (5%)
-    const pc = document.createElement("canvas"); pc.width = pc.height = u; const px = pc.getContext("2d"), gp = u >= 4 ? 1 : 0;
-    px.fillStyle = "rgba(255,255,255,0.05)"; px.fillRect(0, 0, u - gp, u - gp); BM.pat = c.createPattern(pc, "repeat"); BM.patU = u;
+  if (!BM.pat || BM.patU !== u) {                  // pixel spenti appena visibili (10%)
+    const pc = document.createElement("canvas"); pc.width = pc.height = u; const px = pc.getContext("2d"), [pw, ph] = pxSize(u);
+    px.fillStyle = "rgba(255,255,255,0.1)"; px.fillRect(0, 0, pw, ph); BM.pat = c.createPattern(pc, "repeat"); BM.patU = u;
   }
-  c.fillStyle = BM.pat; c.fillRect(0, 0, cols * u, rows * u);
   clearTimeout(BM.mqT);
   if (edOn()) {                                   // orizzontale (o TEXT su desktop): riga di scrittura con cursore e selezione
     const t = [...draft.text], car = draft.caret, xs = [0]; for (const ch of t) xs.push(xs[xs.length - 1] + pxWidth(ch));

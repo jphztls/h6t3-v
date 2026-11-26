@@ -2033,17 +2033,22 @@ function drawD1() { if (drawD1raw() !== false) oled(); }
 const OL = { g: null, s: null };
 function oled() {                                 // riflesso sul vetro (copia tenue spostata) e griglia dei pixel spenti
   const cv = BM.cv; if (!cv || !cv.width) return; const c = BM.x, W = cv.width, H = cv.height;
-  if (!OL.g) { OL.g = document.createElement("canvas"); OL.s = document.createElement("canvas"); OL.b = document.createElement("canvas"); }
-  const g = OL.g, sm = OL.s, bl = OL.b, k = BM.u * 2;
-  if (g.width !== W || g.height !== H) { g.width = bl.width = W; g.height = bl.height = H; sm.width = Math.max(1, Math.round(W / k)); sm.height = Math.max(1, Math.round(H / k)); }
-  const gx = g.getContext("2d"), sx = sm.getContext("2d"), bx = bl.getContext("2d"), GW = Math.floor(W / BM.u) * BM.u, GH = Math.floor(H / BM.u) * BM.u;
-  gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);                              // solo i pixel accesi
-  sx.globalCompositeOperation = "copy"; sx.imageSmoothingEnabled = true; sx.drawImage(g, 0, 0, sm.width, sm.height);
-  bx.globalCompositeOperation = "copy"; bx.imageSmoothingEnabled = true; bx.drawImage(sm, 0, 0, W, H);   // alone morbido…
+  if (!OL.g) { OL.g = document.createElement("canvas"); OL.s = document.createElement("canvas"); OL.s2 = document.createElement("canvas"); OL.s3 = document.createElement("canvas"); OL.b = document.createElement("canvas"); }
+  const g = OL.g, sm = OL.s, s2 = OL.s2, s3 = OL.s3, bl = OL.b, k = BM.u;
+  if (g.width !== W || g.height !== H) {
+    g.width = bl.width = W; g.height = bl.height = H;
+    sm.width = Math.max(1, Math.round(W / k)); sm.height = Math.max(1, Math.round(H / k));            // una cella = un punto
+    s2.width = Math.max(1, sm.width >> 1); s2.height = Math.max(1, sm.height >> 1); s3.width = Math.max(1, sm.width >> 2); s3.height = Math.max(1, sm.height >> 2);
+  }
+  const gx = g.getContext("2d"), sx = sm.getContext("2d"), x2 = s2.getContext("2d"), x3 = s3.getContext("2d"), bx = bl.getContext("2d"), GW = Math.floor(W / BM.u) * BM.u, GH = Math.floor(H / BM.u) * BM.u;
+  gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);                              // solo i pixel accesi (il riflesso non c'è ancora)
+  for (const [x, cnv, src] of [[sx, sm, g], [x2, s2, sm], [x3, s3, s2]]) { x.globalCompositeOperation = "copy"; x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(src, 0, 0, cnv.width, cnv.height); }
+  x2.globalCompositeOperation = "copy"; x2.drawImage(s3, 0, 0, s2.width, s2.height);            // risale a gradini: alone largo e morbido, senza macchie
+  bx.globalCompositeOperation = "copy"; bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = "high"; bx.drawImage(s2, 0, 0, W, H);   // alone morbido…
   bx.globalCompositeOperation = "destination-in"; bx.fillStyle = BM.mask; bx.fillRect(0, 0, GW, GH);      // …che resta solo dentro le celle dei pixel (bleeding)
   c.save(); c.globalCompositeOperation = "lighter";
   c.globalAlpha = 0.24; c.drawImage(g, 0, -BM.u * 3);                                         // sdoppiamento: riflesso 3 pixel più in alto
-  c.globalAlpha = 1; c.drawImage(bl, 0, 0); c.drawImage(bl, 0, 0);                             // bleeding nei pixel spenti vicini (doppio)
+  c.globalAlpha = 1; c.drawImage(bl, 0, 0); c.globalAlpha = 0.6; c.drawImage(bl, 0, 0);          // bleeding nei pixel spenti vicini
   if (!OL.v || OL.v.width !== W || OL.v.height !== H || OL.vu !== BM.u) {                     // pixel spenti al 20%, più spenti verso i bordi: profondità
     const v = OL.v = OL.v || document.createElement("canvas"); v.width = W; v.height = H; OL.vu = BM.u; const vx = v.getContext("2d");
     vx.fillStyle = BM.pat; vx.fillRect(0, 0, GW, GH); vx.globalCompositeOperation = "destination-in";

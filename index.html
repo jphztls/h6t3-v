@@ -201,10 +201,10 @@ body.land #ctl { gap: 70px; }
 
 /* ===== Desktop (v21): Display 2 grande, D1 + frecce + Shift + folder + mod + ghiera in una sola barra ===== */
 body.desk #app { max-width: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) 44px 30px; column-gap: 16px; row-gap: 16px; padding: 24px 24px 0; }
-body.desk #d2 { grid-column: 1 / 3; grid-row: 1; margin: 0; min-height: 0; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 860px); grid-template-rows: minmax(0, 1fr); }
+body.desk #d2 { grid-column: 1 / 3; grid-row: 1; margin: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 860px) minmax(373px, 1fr); grid-template-rows: minmax(0, 1fr); }   /* feed a sinistra, margine a destra per CAL o DIR */
 body.desk #d2 > .pane { position: relative; inset: auto; min-height: 0; }
-body.desk #d2 > .pane.on { grid-column: 2; grid-row: 1; }
-body.desk #cal, body.desk #dirs { display: none; grid-column: 1; grid-row: 1; width: 325px; max-width: calc(100% - 48px); min-height: 0; padding: 0; }
+body.desk #d2 > .pane.on { grid-column: 1; grid-row: 1; }
+body.desk #cal, body.desk #dirs { display: none; grid-column: 2; grid-row: 1; width: 325px; max-width: calc(100% - 48px); margin-left: 48px; min-height: 0; padding: 0; }
 body.desk.sdir #dirs, body.desk.scal #cal { display: block; }
 body.desk #dirs .dr { padding: 0; }
 body.desk #bar { grid-column: 1; grid-row: 2; height: 44px; margin: 0; }
@@ -790,9 +790,9 @@ function renderDirs() {
 }
 $("dirs").addEventListener("click", (e) => { const r = e.target.closest(".dr"); if (!r) return; audio(); const i = +r.dataset.i; if (i === dirSel) M.cartelle.shift(); else { dirSel = i; renderDirs(); d1(); sound("browse"); } });
 let dirAct = 0, dirConfirm = false;
-function dirActs(f) { return f === "+" ? [["nuova"]] : [["apri"], ["rinomina"], ["tipo"]].concat(S.folders.filter((o) => o !== f).map((o) => ["unisci", o])).concat([["elimina"]]); }
+function dirActs(f) { return f === "+" ? [["nuova"]] : [["apri"], ["rinomina"], ["tipo"], ["pdf"]].concat(desk ? [["trascrivi"]] : []).concat(S.folders.filter((o) => o !== f).map((o) => ["unisci", o])).concat([["elimina"]]); }
 const FTYPES = ["generica", "tasklist", "calendar"];
-const actLabel = (a, f) => (a[0] === "unisci" ? "unisci in " + a[1] : a[0] === "tipo" ? "tipo " + (S.ftypes[f] || "generica") : a[0]);
+const actLabel = (a, f) => (a[0] === "unisci" ? "unisci in " + a[1] : a[0] === "tipo" ? "tipo " + (S.ftypes[f] || "generica") : a[0] === "pdf" ? "esporta pdf" : a[0] === "trascrivi" ? "trascrivi tutto (" + transFolder(f).length + " nuove)" : a[0]);
 async function mergeFolder(from, to) {             // unisce (o elimina se to è vuoto) una cartella
   if (qf === from) qf = to || null;
   for (const it of items) if (it.folder === from) { it.folder = to || undefined; await dbPut(it); }
@@ -812,6 +812,8 @@ M.cartelle = {
     if (a[0] === "nuova" || a[0] === "rinomina") { flash("Ruota il telefono"); sound("set"); return; }
     if (a[0] === "tipo") { const t = FTYPES[(FTYPES.indexOf(S.ftypes[f] || "generica") + 1) % 3]; if (t === "generica") delete S.ftypes[f]; else S.ftypes[f] = t; saveS(); renderDirs(); renderFeed(); d1(); sound("act"); return; }
     if (a[0] === "apri") { dirOpen = f; S.filter = f; sel = 0; showPane("feed"); renderFeed(); sound("set"); return; }
+    if (a[0] === "pdf") { await folderPdf(f); return; }
+    if (a[0] === "trascrivi") { const L = transFolder(f); setMode("trascrivi"); await transRun(L, f); return; }
     if (!dirConfirm) { dirConfirm = true; d1(); sound("stop"); return; }
     dirConfirm = false;
     if (a[0] === "unisci") { await mergeFolder(f, a[1]); dirSel = S.folders.indexOf(a[1]); flash(f + " → " + a[1]); }
@@ -1343,7 +1345,7 @@ let TW = null, twId = 0; const twCb = {}, TR = { busy: false, msg: "" }, ENGINES
 function tw() {
   if (TW) return TW;
   TW = new Worker("trans-worker.js", { type: "module" });
-  TW.onmessage = (e) => { const m = e.data; if (m.type === "load") { TR.msg = "scarico " + m.what + " " + Math.round((m.loaded / m.total) * 100) + "%"; d1(); } else { const cb = twCb[m.id]; delete twCb[m.id]; if (cb) cb(m); } };
+  TW.onmessage = (e) => { const m = e.data; if (m.type === "load") { TR.dl = "scarico " + m.what; TR.prog = m.loaded / m.total; d1(); } else if (m.type === "prog") { TR.sub = m.f; trProg(); } else { const cb = twCb[m.id]; delete twCb[m.id]; if (cb) cb(m); } };
   TW.onerror = () => { for (const k in twCb) { twCb[k]({ type: "error", error: "worker non avviato" }); delete twCb[k]; } TW = null; };
   return TW;
 }
@@ -1354,30 +1356,36 @@ async function pcm16k(blob) {                     // audio → mono 16 kHz per W
   return (await oc.startRendering()).getChannelData(0);
 }
 const transParts = (it) => parts(it).filter((p) => p.type === "image" || p.type === "audio");
+const hasTrans = (it) => (it.att || []).some((p) => p.type === "text" && (p.orig === "trascrizione" || !p.orig));   // ha già il file di trascrizione
+function trProg() { if (!TR.busy) return; TR.dl = ""; TR.prog = Math.min(1, (TR.done + (TR.i + Math.min(1, TR.sub || 0)) / TR.n) / TR.tot); d1(); }
+async function transItem(it) {                   // trascrive una nota: un file di testo con tutte le pagine e gli audio
+  const L = transParts(it), out = []; TR.n = L.length;
+  for (let i = 0; i < L.length; i++) {
+    const p = L[i]; TR.i = i; TR.sub = 0; TR.msg = TR.tot > 1 ? (TR.dir || "cartella") + " " + (TR.done + 1) + "/" + TR.tot : it.name + " " + (i + 1) + "/" + L.length; trProg();
+    let t;
+    if (p.type === "audio") { const pcm = await pcm16k(p.blob); t = await twRun({ kind: "audio", pcm }, [pcm.buffer]); }
+    else t = await twRun({ kind: "image", blob: p.blob, engine: S.ocrEngine || "ocr" });
+    if (t) out.push(t);
+  }
+  const txt = out.join("\n\n"); if (!txt.trim()) return false;
+  (it.att = it.att || []).push({ type: "text", ext: "txt", mime: "text/plain", orig: "trascrizione", text: txt }); await dbPut(it); renderFeedKeep(); return true;
+}
+async function transRun(list, dir) {             // una nota o tutta una cartella (salta quelle già trascritte)
+  if (TR.busy || !desk) { sound("stop"); return; }
+  if (!list.length) { flash(dir ? "Niente di nuovo da trascrivere" : "Niente da trascrivere"); sound("stop"); return; }
+  Object.assign(TR, { busy: true, done: 0, tot: list.length, i: 0, n: 1, sub: 0, dir, prog: 0, dl: "" }); sound("act"); let ok = 0;
+  try { for (const it of list) { if (await transItem(it)) ok++; TR.done++; } flash(ok ? (dir ? "Trascritte " + ok + " note in " + dir : "Trascritto " + list[0].name) : "Nessun testo trovato"); sound(ok ? "set" : "stop"); }
+  catch (e) { flash("Errore: " + e.message); sound("stop"); }
+  TR.busy = false; TR.msg = ""; TR.prog = null; d1();
+}
+const transFolder = (f) => items.filter((it) => it.folder === f && !it.demo && transParts(it).length && !hasTrans(it)).reverse();
 M.trascrivi = {
   dial(d) { return setSel(sel + d); },
   sdial() { if (TR.busy) return false; S.ocrEngine = S.ocrEngine === "vl" ? "ocr" : "vl"; saveS(); d1(); return true; },   // motore per le scansioni
   center() { this.shift(); },
-  async shift() {
-    const it = cur(); if (TR.busy || !it || !desk) { sound("stop"); return; }
-    const L = transParts(it); if (!L.length) { flash("Niente da trascrivere"); sound("stop"); return; }
-    TR.busy = true; sound("act"); const out = [];
-    try {
-      for (let i = 0; i < L.length; i++) {
-        const p = L[i]; TR.msg = it.name + "  " + (i + 1) + "/" + L.length + " " + (p.type === "audio" ? "audio" : "pagina"); d1();
-        let t;
-        if (p.type === "audio") { const pcm = await pcm16k(p.blob); t = await twRun({ kind: "audio", pcm }, [pcm.buffer]); }
-        else t = await twRun({ kind: "image", blob: p.blob, engine: S.ocrEngine || "ocr" });
-        if (t) out.push(t);
-      }
-      const txt = out.join("\n\n");
-      if (!txt.trim()) flash("Nessun testo trovato");
-      else { (it.att = it.att || []).push({ type: "text", ext: "txt", mime: "text/plain", text: txt }); await dbPut(it); renderFeedKeep(); flash("Trascritto " + it.name); sound("set"); }
-    } catch (e) { flash("Errore: " + e.message); sound("stop"); }
-    TR.busy = false; TR.msg = ""; d1();
-  },
+  async shift() { const it = cur(); if (!it) { sound("stop"); return; } await transRun(transParts(it).length ? [it] : [], null); },
   d1() {
-    if (TR.busy) return TR.msg;
+    if (TR.busy) return TR.dl || TR.msg;
     const it = cur(); if (!it) return "";
     const L = transParts(it), ni = L.filter((p) => p.type === "image").length, na = L.length - ni;
     if (!L.length) return it.name + "  niente da trascrivere";
@@ -1429,11 +1437,13 @@ function drawQr(text) {
 }
 function showLink(cls) { const el = $("link"); el.classList.toggle("qr", cls.includes("qr")); el.classList.toggle("cam", cls.includes("cam")); }
 let lstream = null, lscanT = 0;
-function lcamStop() { clearTimeout(lscanT); if (lstream) lstream.getTracks().forEach((t) => t.stop()); lstream = null; $("lvid").srcObject = null; }
+let lgen = 0;
+function lcamStop() { lgen++; clearTimeout(lscanT); if (lstream) lstream.getTracks().forEach((t) => t.stop()); lstream = null; $("lvid").srcObject = null; }
 async function camScan(want, done) {             // legge un QR dalla fotocamera
-  lcamStop();
-  lstream = await navigator.mediaDevices.getUserMedia({ video: desk ? true : { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
-  const v = $("lvid"); v.srcObject = lstream; await v.play().catch(() => {});
+  lcamStop(); const gen = lgen;
+  const st = await navigator.mediaDevices.getUserMedia({ video: desk ? true : { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
+  if (gen !== lgen || RT.open || mode !== "control") { st.getTracks().forEach((t) => t.stop()); return; }   // fermata nel frattempo: spegni subito
+  lstream = st; const v = $("lvid"); v.srcObject = lstream; await v.play().catch(() => {});
   const cv = document.createElement("canvas"), c = cv.getContext("2d", { willReadFrequently: true });
   const tick = () => {
     if (!lstream) return;
@@ -1479,7 +1489,7 @@ async function deskOffer() {                     // computer: QR con l'offerta e
   rtStatus(LK.fp ? "inquadra il QR con l'iPhone in CTRL" : "inquadra il QR con l'iPhone, poi scrivi qui il codice");
 }
 async function deskCode(fp) {                    // primo collegamento: il codice dell'iPhone (scritto, incollato o letto dalla webcam)
-  await kput("phone", fp); sound("set");
+  await kput("phone", fp); sound("set"); lcamStop();
   if (RT.pc && RT.pc.signalingState === "have-local-offer") { LK.fp = fp; rtStatus("collego..."); await RT.pc.setRemoteDescription(phoneAnswer(LK.u, LK.p, fp)); }
   else { await deskOffer(); rtStatus("iPhone memorizzato: inquadra di nuovo il QR"); }
 }
@@ -1497,7 +1507,7 @@ async function pairStart() {
     showPane("link");
     if (desk) {
       await deskOffer();
-      camScan("F", (txt) => { const fp = codeFp(txt.slice(7)); if (fp) deskCode(fp); }).then(() => showLink("qr cam")).catch(() => {});   // webcam facoltativa
+      if (!LK.fp && !RT.open) camScan("F", (txt) => { const fp = codeFp(txt.slice(7)); if (fp) deskCode(fp); }).then(() => showLink("qr cam")).catch(() => {});   // webcam facoltativa
     } else {                                     // iPhone: legge il QR e si collega; la prima volta mostra il suo codice
       showLink("cam"); rtStatus("inquadra il QR sul computer");
       await camScan("O", async (txt) => {
@@ -1884,6 +1894,80 @@ async function exportZip(list, fname) {
   files.push({ name: "index.json", data: enc.encode(JSON.stringify({ app: "JRN-1", v: 3, folders: S.folders.map((f) => ({ name: f, type: S.ftypes[f] || "generica" })), items: index }, null, 1)), date: Date.now() });
   await shareFiles([new File([makeZip(files)], fname, { type: "application/zip" })]);
 }
+/* ---- PDF di una cartella: testi, immagini (con il filtro) e trascrizioni; niente audio. Scritto a mano, senza librerie ---- */
+const HELV = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const WIN = { "€": 0x80, "‚": 0x82, "„": 0x84, "…": 0x85, "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97 };
+const pdfCode = (ch) => { const c = ch.charCodeAt(0); return c >= 32 && c < 127 ? c : c >= 160 && c < 256 ? c : WIN[ch] || 63; };
+const pdfW = (ch) => { const c = ch.charCodeAt(0); if (c >= 32 && c < 127) return HELV[c - 32]; const b = ch.normalize("NFD").charCodeAt(0); return b >= 32 && b < 127 ? HELV[b - 32] : WIN[ch] ? 333 : 556; };
+const pdfStr = (s) => { let o = ""; for (const ch of s) { const b = pdfCode(ch); o += (b === 40 || b === 41 || b === 92 ? "\\" : "") + String.fromCharCode(b); } return o; };
+const latin = (s) => { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; };
+async function jpegOf(p) {                       // immagine come JPEG (max 2000 px), col filtro della scansione
+  const bm = await createImageBitmap(p.blob), k = Math.min(1, 2000 / Math.max(bm.width, bm.height));
+  const c = canvasOf(Math.round(bm.width * k), Math.round(bm.height * k)), x = c.getContext("2d"); x.drawImage(bm, 0, 0, c.width, c.height); bm.close && bm.close();
+  if (p.filter && p.filter !== "originale") x.putImageData(enhance(x.getImageData(0, 0, c.width, c.height), p.filter), 0, 0);
+  const b = await toBlob(c, 0.85), w = c.width, h = c.height; freeCanvas(c); return { bytes: new Uint8Array(await b.arrayBuffer()), w, h };
+}
+async function makePdf(title, list) {
+  const W = 595, H = 842, M = 56, CW = W - 2 * M, FS = 10, LH = 14, pages = [], imgs = []; let pg = null, y = 0;
+  const page = () => { pg = { ops: [] }; pages.push(pg); y = H - M; };
+  const need = (h) => { if (!pg || y - h < M) page(); };
+  const line = (t, bold) => { need(LH); pg.ops.push("BT /" + (bold ? "F2" : "F1") + " " + FS + " Tf " + M + " " + (y - FS) + " Td (" + pdfStr(t) + ") Tj ET"); y -= LH; };
+  const text = (t, bold) => {
+    for (const para of String(t).replace(/\r/g, "").split("\n")) {
+      if (!para.trim()) { y -= LH / 2; continue; }
+      let cur = "", cw = 0; const max = (CW * 1000) / FS;
+      for (const word of para.split(/(\s+)/)) {
+        let ww = 0; for (const ch of word) ww += pdfW(ch);
+        if (cw + ww > max && cur.trim()) { line(cur.trimEnd(), bold); cur = ""; cw = 0; if (/^\s+$/.test(word)) continue; }
+        if (ww > max) { for (const ch of word) { const c = pdfW(ch); if (cw + c > max) { line(cur, bold); cur = ""; cw = 0; } cur += ch; cw += c; } continue; }
+        cur += word; cw += ww;
+      }
+      if (cur.trim()) line(cur.trimEnd(), bold);
+    }
+  };
+  const rule = () => { need(16); pg.ops.push("0.5 w " + M + " " + (y - 6) + " m " + (W - M) + " " + (y - 6) + " l S"); y -= 18; };
+  const image = (im) => {
+    let dw = Math.min(CW, im.w), dh = (im.h * dw) / im.w; const mh = H - 2 * M - LH; if (dh > mh) { dh = mh; dw = (im.w * dh) / im.h; }
+    need(dh + 8); const nm = "Im" + imgs.length; imgs.push(im);
+    pg.ops.push("q " + dw.toFixed(2) + " 0 0 " + dh.toFixed(2) + " " + M + " " + (y - dh).toFixed(2) + " cm /" + nm + " Do Q"); y -= dh + 8;
+  };
+  page(); text(title, true); text(list.length + (list.length === 1 ? " nota" : " note") + "   esportato il " + dmy(new Date())); rule();
+  for (const it of list) {
+    const P = parts(it), tr = hasTrans(it);
+    text(it.name + (it.folder ? "   " + it.folder : "") + (it.when ? "   " + it.when.replace("T", " ") : "") + (it.done ? "   fatto" : ""), true);
+    for (const p of P) {
+      if (p.type === "text") { if (p.text && p.text.trim()) text(p.text); }
+      else if (p.type === "image") { try { image(await jpegOf(p)); } catch (e) { text("[immagine non leggibile]"); } }
+      else if (p.type === "audio") { if (!tr) text("[audio " + clock(p.dur || 0) + ", senza trascrizione]"); }
+      else text("[" + (p.orig || it.name + "." + p.ext) + "]");
+    }
+    rule();
+  }
+  // scrittura del file
+  const chunks = [], offs = []; let len = 0;
+  const put = (u) => { if (typeof u === "string") u = latin(u); chunks.push(u); len += u.length; };
+  const obj = (n, body) => { offs[n] = len; put(n + " 0 obj\n"); for (const b of body) put(b); put("\nendobj\n"); };
+  put("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  const I0 = 5, P0 = I0 + imgs.length, kids = pages.map((_, i) => P0 + i * 2 + 1 + " 0 R").join(" ");
+  const res = "<< /Font << /F1 3 0 R /F2 4 0 R >> /XObject << " + imgs.map((_, i) => "/Im" + i + " " + (I0 + i) + " 0 R").join(" ") + " >> >>";
+  obj(1, ["<< /Type /Catalog /Pages 2 0 R >>"]);
+  obj(2, ["<< /Type /Pages /Kids [" + kids + "] /Count " + pages.length + " >>"]);
+  obj(3, ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"]);
+  obj(4, ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"]);
+  imgs.forEach((im, i) => obj(I0 + i, ["<< /Type /XObject /Subtype /Image /Width " + im.w + " /Height " + im.h + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + im.bytes.length + " >>\nstream\n", im.bytes, "\nendstream"]));
+  pages.forEach((p, i) => { const cs = latin(p.ops.join("\n")); obj(P0 + i * 2, ["<< /Length " + cs.length + " >>\nstream\n", cs, "\nendstream"]); obj(P0 + i * 2 + 1, ["<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + W + " " + H + "] /Resources " + res + " /Contents " + (P0 + i * 2) + " 0 R >>"]); });
+  const N = P0 + pages.length * 2, xref = len;
+  put("xref\n0 " + N + "\n0000000000 65535 f \n" + offs.slice(1, N).map((o) => String(o).padStart(10, "0") + " 00000 n \n").join(""));
+  put("trailer\n<< /Size " + N + " /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n");
+  return new Blob(chunks, { type: "application/pdf" });
+}
+async function folderPdf(f) {
+  const list = items.filter((it) => it.folder === f).slice().reverse();   // dalla più vecchia
+  if (!list.length) { flash("Cartella vuota"); sound("stop"); return; }
+  flash("Preparo il pdf…"); await new Promise((r) => setTimeout(r, 30));
+  try { const b = await makePdf("JRN-1  " + f, list); await shareFiles([new File([b], "JRN-1 " + f + " " + ymd(new Date()) + ".pdf", { type: "application/pdf" })]); flash("Pdf " + f + "  " + fmtSize(b.size)); sound("set"); }
+  catch (e) { flash("Errore: " + (e.message || e)); sound("stop"); }
+}
 async function shareFiles(files) {
   try { if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
   files.forEach((f, i) => setTimeout(() => { const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }, i * 400));
@@ -1950,12 +2034,16 @@ function oled() {                                 // riflesso sul vetro (copia t
   const cv = BM.cv; if (!cv || !cv.width) return; const c = BM.x, W = cv.width, H = cv.height;
   if (!OL.g) { OL.g = document.createElement("canvas"); OL.s = document.createElement("canvas"); }
   const g = OL.g, s = OL.s; if (g.width !== W || g.height !== H) { g.width = W; g.height = H; s.width = Math.max(1, W >> 3); s.height = Math.max(1, H >> 3); }
-  const gx = g.getContext("2d"), sx = s.getContext("2d");
+  if (!OL.t) OL.t = document.createElement("canvas");
+  const t = OL.t; if (t.width !== Math.max(1, W >> 4)) { t.width = Math.max(1, W >> 4); t.height = Math.max(1, H >> 4); }
+  const gx = g.getContext("2d"), sx = s.getContext("2d"), tx = t.getContext("2d");
   gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);
   sx.globalCompositeOperation = "copy"; sx.imageSmoothingEnabled = true; sx.drawImage(g, 0, 0, s.width, s.height);
+  tx.globalCompositeOperation = "copy"; tx.imageSmoothingEnabled = true; tx.drawImage(s, 0, 0, t.width, t.height);
   c.save(); c.globalCompositeOperation = "lighter"; c.imageSmoothingEnabled = true;
-  const o = Math.max(1, Math.round(DPR * 1.5)); c.globalAlpha = 0.16; c.drawImage(g, o, o);   // sdoppiamento
-  c.globalAlpha = 0.32; c.drawImage(s, 0, 0, W, H);                                           // bloom
+  c.globalAlpha = 0.16; c.drawImage(g, 0, Math.max(2, Math.round(BM.u * 1.2)));            // sdoppiamento: riflesso spostato in verticale
+  c.globalAlpha = 0.5; c.drawImage(s, 0, 0, W, H);                                            // bloom vicino
+  c.globalAlpha = 0.35; c.drawImage(t, 0, 0, W, H);                                           // bloom largo
   c.restore();
 }
 function drawD1raw() {
@@ -1966,6 +2054,11 @@ function drawD1raw() {
   const u = (BM.u = Math.max(2, Math.round((14 * DPR) / 9))), c = BM.x;   // altezza delle maiuscole circa 14px
   const cols = Math.floor(cv.width / u), rows = Math.floor(cv.height / u), top = Math.floor((rows - BM.NR) / 2), pad = Math.round(10 * DPR / u);
   c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height);
+  if (!BM.pat || BM.patU !== u) {                  // pixel spenti appena visibili (5%)
+    const pc = document.createElement("canvas"); pc.width = pc.height = u; const px = pc.getContext("2d"), gp = u >= 4 ? 1 : 0;
+    px.fillStyle = "rgba(255,255,255,0.05)"; px.fillRect(0, 0, u - gp, u - gp); BM.pat = c.createPattern(pc, "repeat"); BM.patU = u;
+  }
+  c.fillStyle = BM.pat; c.fillRect(0, 0, cols * u, rows * u);
   clearTimeout(BM.mqT);
   if (edOn()) {                                   // orizzontale (o TEXT su desktop): riga di scrittura con cursore e selezione
     const t = [...draft.text], car = draft.caret, xs = [0]; for (const ch of t) xs.push(xs[xs.length - 1] + pxWidth(ch));
@@ -1987,6 +2080,12 @@ function drawD1raw() {
     const x0 = X * u, x1 = (tx - 6) * u, px = Math.max(1, Math.round(DPR)), n = Math.floor((x1 - x0) / (2 * px)), on = Math.round((rec.lv || 0) * n), y0 = (top + 1) * u, hh = 9 * u;
     c.fillStyle = inkC; for (let i = 0; i < n; i++) { const bh = i < on ? hh : px; c.fillRect(x0 + i * 2 * px, y0 + Math.round((hh - bh) / 2), px, bh); }
     pxDraw(tm, tx, top, inkC); return;
+  }
+  if (TR.busy && mode === "trascrivi" && !msg && TR.prog != null) {   // TRANS: barra di avanzamento a barre da 1px, poi la percentuale
+    const pt = Math.round(TR.prog * 100) + "%", tw = pxText(pt), tx = end - tw; X = pxDraw(val, X, top, inkC) + 6;
+    const x0 = X * u, x1 = (tx - 6) * u, px = Math.max(1, Math.round(DPR)), n = Math.max(0, Math.floor((x1 - x0) / (2 * px))), on = Math.round(TR.prog * n), y0 = (top + 1) * u, hh = 9 * u;
+    c.fillStyle = inkC; for (let i = 0; i < n; i++) { const bh = i < on ? hh : px; c.fillRect(x0 + i * 2 * px, y0 + Math.round((hh - bh) / 2), px, bh); }
+    pxDraw(pt, tx, top, inkC); return;
   }
   const w = pxText(val), avail = end - X;
   if (w <= avail) { pxDraw(val, X, top, inkC); BM.mqKey = ""; return; }
@@ -2041,8 +2140,8 @@ window.addEventListener("resize", () => setTimeout(layout, 60));
 window.addEventListener("orientationchange", () => setTimeout(layout, 250));
 if (window.visualViewport) visualViewport.addEventListener("resize", () => setTimeout(layout, 60));
 /* ============ Desktop: pannello a destra, tastiera e rotella ============ */
-function applySide() {                           // a sinistra: cartelle o calendario
-  const sd = mode === "cartelle", sc = mode === "calendario";   // a sinistra del feed: o l'uno o l'altro
+function applySide() {                           // a destra del feed: cartelle o calendario
+  const sd = mode === "cartelle", sc = mode === "calendario";   // o l'uno o l'altro
   document.body.classList.toggle("sdir", sd); document.body.classList.toggle("scal", sc);
   if (sd) renderDirs(); if (sc) renderCal();
 }

@@ -43,7 +43,8 @@ async function ocr(blob, key) {
   const conv = [{ role: "user", content: [{ type: "image" }, { type: "text", text: m.prompt }] }];
   const text = processor.apply_chat_template(conv, { add_generation_prompt: true });
   const inputs = await processor(text, image);
-  const out = await model.generate({ ...inputs, max_new_tokens: 2048, do_sample: false, repetition_penalty: 1.05 });
+  let n = 0; const streamer = { put() { n++; if (n % 6 === 0) step(1 - Math.exp(-n / 350)); }, end() {} };   // avanzamento stimato dai token generati
+  const out = await model.generate({ ...inputs, max_new_tokens: 2048, do_sample: false, repetition_penalty: 1.05, streamer });
   const dec = processor.batch_decode(out.slice(null, [inputs.input_ids.dims.at(-1), null]), { skip_special_tokens: true });
   return (dec[0] || "").replace(/^```[a-z]*\n?|```$/g, "").replace(/\n{2,}/g, "\n").trim();   // una riga per riga, senza righe vuote in mezzo
 }
@@ -58,17 +59,23 @@ async function loadAsr() {
   return asr;
 }
 const HALL = /^(sottotitoli( creati)? (a cura|dalla comunità)|grazie (a tutti )?per (la visione|l'ascolto)|grazie a tutti\.?$|amara\.org)/i;   // frasi che Whisper inventa sul silenzio
-async function stt(pcm) {
-  const p = await loadAsr();
-  const r = await p(pcm, { language: "italian", task: "transcribe", chunk_length_s: 30, stride_length_s: 5 });
-  return (r.text || "").split(/(?<=[.!?])\s+/).filter((s) => !HALL.test(s.trim())).join(" ").trim();
+async function stt(pcm) {                        // a pezzi di massimo 28 s, tagliati nel punto più silenzioso: così si conosce l'avanzamento
+  const p = await loadAsr(), R = 16000, out = []; let s = 0;
+  while (s < pcm.length) {
+    let e = Math.min(pcm.length, s + 28 * R);
+    if (e < pcm.length) { let best = e, bv = Infinity; for (let w = s + 20 * R; w + 1600 <= e; w += 800) { let v = 0; for (let j = w; j < w + 1600; j += 4) v += Math.abs(pcm[j]); if (v < bv) { bv = v; best = w + 800; } } e = best; }
+    if (e - s > R * 0.3) { const r = await p(pcm.subarray(s, e), { language: "italian", task: "transcribe" }); out.push((r.text || "").trim()); }
+    s = e; step(s / pcm.length);
+  }
+  return out.join(" ").split(/(?<=[.!?])\s+/).filter((s) => !HALL.test(s.trim())).join(" ").trim();
 }
 
 async function retry(fn) {                        // download lunghi: se la rete cade riprova (i file già finiti restano in cache)
   for (let i = 0; ; i++) { try { return await fn(); } catch (e) { if (i >= 2 || !/network|fetch|load/i.test(String(e && e.message))) throw e; postMessage({ type: "load", what: "riprovo", loaded: i + 1, total: 3 }); await new Promise((r) => setTimeout(r, 3000)); } }
 }
+let CUR = 0; const step = (f) => postMessage({ type: "prog", id: CUR, f });
 self.onmessage = async (e) => {
-  const { id, kind, blob, pcm, engine } = e.data;
+  const { id, kind, blob, pcm, engine } = e.data; CUR = id;
   try {
     const text = kind === "image" ? await retry(() => ocr(blob, engine || "ocr")) : await retry(() => stt(pcm));
     postMessage({ type: "done", id, text });

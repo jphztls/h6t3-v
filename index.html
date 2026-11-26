@@ -42,6 +42,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #d2 { position: relative; flex: 1; min-height: 120px; margin: var(--space-1) var(--space-3) 0; overflow: hidden; }
 .pane { position: absolute; inset: 0; display: none; background: var(--surface); }
 .pane.on { display: block; }
+* { scrollbar-width: none; } *::-webkit-scrollbar { display: none; }
 .scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
 .it { position: relative; padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--border-hairline) solid var(--line); }
 .it:first-child { border-top: 0; }
@@ -76,6 +77,7 @@ button { font: var(--text); color: inherit; background: none; border: 0; padding
 #detail .rog { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2) var(--space-3); }   /* ordine pagine: griglia 3×3 */
 #detail .rog .pg { min-width: 0; }
 #detail .rog .th { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#detail .rog .th.add { outline: var(--border-hairline) solid var(--line); outline-offset: -1px; font-size: 16px; }
 #detail .rog .th img { width: 100%; height: 100%; object-fit: contain; }
 #detail .rog .n { text-align: center; margin-top: 4px; font-variant-numeric: tabular-nums; }
 #detail .rog .pg.ro .n { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
@@ -199,15 +201,10 @@ body.land #ctl { gap: 70px; }
 
 /* ===== Desktop (v21): Display 2 grande, D1 + frecce + Shift + folder + mod + ghiera in una sola barra ===== */
 body.desk #app { max-width: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) 44px 30px; column-gap: 16px; row-gap: 16px; padding: 24px 24px 0; }
-body.desk #d2 { grid-column: 1 / 3; grid-row: 1; margin: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-body.desk.sdir #d2, body.desk.scal #d2 { grid-template-columns: minmax(0, 1fr) 325px; }
+body.desk #d2 { grid-column: 1 / 3; grid-row: 1; margin: 0; min-height: 0; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 860px); grid-template-rows: minmax(0, 1fr); }
 body.desk #d2 > .pane { position: relative; inset: auto; min-height: 0; }
-body.desk #d2 > .pane.on { grid-column: 1; grid-row: 1 / 3; }
-body.desk #cal, body.desk #dirs { display: none; grid-column: 2; margin-left: 48px; padding: 0; }
-body.desk #cal { grid-row: 1; padding-bottom: 32px; }
-body.desk #dirs { grid-row: 2; }
-body.desk.sdir:not(.scal) #dirs { grid-row: 1 / 3; }
-body.desk.scal:not(.sdir) #cal { grid-row: 1 / 3; }
+body.desk #d2 > .pane.on { grid-column: 2; grid-row: 1; }
+body.desk #cal, body.desk #dirs { display: none; grid-column: 1; grid-row: 1; width: 325px; max-width: calc(100% - 48px); min-height: 0; padding: 0; }
 body.desk.sdir #dirs, body.desk.scal #cal { display: block; }
 body.desk #dirs .dr { padding: 0; }
 body.desk #bar { grid-column: 1; grid-row: 2; height: 44px; margin: 0; }
@@ -231,6 +228,8 @@ body.desk #qr { width: 300px; }
 
 .led.sync { background: #30d158 !important; animation: blink 1s steps(1) infinite; }   /* sincronizzazione attiva */
 .led.rec { background: var(--led) !important; animation: blink 1s steps(1) infinite; }   /* registrazione: vince il rosso */
+.led.rec.pause { animation: none; }
+#cam.snap video { opacity: .35; }   /* scatto */   /* in pausa: rosso fisso */
 </style>
 </head>
 <body>
@@ -322,7 +321,7 @@ const MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "i
 const parts = (it) => [it].concat(it.att || []);
 
 async function addItem(it) {
-  it.name = it.name || nextName(); it.created = it.created || Date.now();
+  it.name = it.name || nextName(capDay || undefined); it.created = it.created || Date.now(); capDay = null;
   await dbPut(it); items.push(it); sortItems(); S.filter = null; renderFeed(); setSel(vis().indexOf(it), true);
   sound("act"); flash("Salvato " + it.name);
   return it;
@@ -399,7 +398,7 @@ function setMode(k) {
   if (k === mode) return;
   if (rec) { sound("stop"); return; }
   const old = M[mode], was = mode, keep = cur(); if (old && old.leave) old.leave();
-  mode = k; S.mode = k; if (CAP.includes(k)) S.lastCap = k; saveS();
+  mode = k; S.mode = k; if (CAP.includes(k)) S.lastCap = k; else capDay = null; saveS();
   if (qf && (was === "consulta" || k === "consulta")) { renderFeed(); setSel(Math.max(0, vis().indexOf(keep)), true); }
   showPane("feed"); M[k].enter && M[k].enter(); if (desk) applySide(); d1();
 }
@@ -418,8 +417,8 @@ let msg = "", msgT = 0;
 function flash(t) { msg = t; clearTimeout(msgT); msgT = setTimeout(() => { msg = ""; d1(); }, 1600); d1(); }
 function d1() {
   $("d1m").textContent = LABEL[mode]; $("d1m").style.display = LABEL[mode] ? "" : "none";
-  $("d1v").textContent = msg || (M[mode].d1 ? M[mode].d1() : "");
-  $("d1t").textContent = rec && !msg ? clock((performance.now() - rec.t0) / 1000) : "";
+  $("d1v").textContent = msg || ((capDay && CAP.includes(mode) && !rec ? "per " + dmy(capDay) + "  " : "") + (M[mode].d1 ? M[mode].d1() : ""));
+  $("d1t").textContent = rec && !msg ? clock(recEl()) : "";
   $("d1").classList.toggle("meter", !!rec && !msg);
   drawD1();
 }
@@ -500,7 +499,7 @@ function filteredUrl(it, k) {
   return fcache.get(key);
 }
 function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
-function drawWave(cv, peaks, prog) {          // barre verticali da 1px distanziate 1px; in ascolto una linea indica la posizione
+function drawWave(cv, peaks, prog, marks, dur) {          // barre verticali da 1px distanziate 1px; in ascolto una linea indica la posizione
   const w = cv.clientWidth || 300, h = cv.clientHeight || 34; cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
   const c = cv.getContext("2d"), W = cv.width, H = cv.height, px = Math.max(1, Math.round(DPR)); c.fillStyle = ink();
   const n = peaks && peaks.length ? peaks.length : 0, bars = Math.floor(W / (2 * px));
@@ -509,6 +508,7 @@ function drawWave(cv, peaks, prog) {          // barre verticali da 1px distanzi
     if (n) { const f = (j / Math.max(1, bars - 1)) * (n - 1), i = Math.floor(f), t = f - i; v = peaks[i] * (1 - t) + (peaks[Math.min(n - 1, i + 1)] || 0) * t; }
     const bh = Math.max(px, Math.round(v * H)); c.fillRect(j * 2 * px, Math.round((H - bh) / 2), px, bh);
   }
+  if (marks && marks.length && dur) for (const t of marks) { const x = Math.min(W - px, Math.round((t / dur) * W)), mh = Math.round(H / 5); c.fillRect(x, 0, px, mh); c.fillRect(x, H - mh, px, mh); }   // segni
   if (prog != null && prog > 0) { const x = Math.min(W - px, Math.round(prog * W)); c.clearRect(x - px, 0, px * 3, H); c.fillRect(x, 0, px, H); }
 }
 function partEl(it, k, full) {
@@ -527,7 +527,7 @@ function partEl(it, k, full) {
   else if (p.type === "audio") {
     const cv = document.createElement("canvas"); cv.className = "wf"; d.appendChild(cv); d.classList.add("au");
     const t = document.createElement("div"); t.className = "fl"; t.textContent = p.dur ? clock(p.dur) : (p.orig || "audio"); d.appendChild(t);
-    d.dataset.k = k; requestAnimationFrame(() => drawWave(cv, p.peaks));
+    d.dataset.k = k; requestAnimationFrame(() => drawWave(cv, p.peaks, null, p.marks, p.dur));
   } else if (p.type === "pdf" && full) { const fr = document.createElement("iframe"); fr.src = urlOf(it, k); d.appendChild(fr); }
   else { const t = document.createElement("div"); t.textContent = (p.orig || it.name + "." + p.ext) + "  " + fmtSize(p.blob ? p.blob.size : 0); d.appendChild(t); }
   return d;
@@ -615,7 +615,11 @@ function openDetail() {
   const it = cur(); if (!it) return;
   const dt = $("detail"); dt.innerHTML = ""; dt.scrollTop = 0; inDetail = true; showPane("detail");
   parts(it).forEach((_, k) => { const pe = partEl(it, k, true); if (pe) dt.appendChild(pe); });
-  dt.onclick = (e) => { const d = e.target.closest(".part[data-k]"); if (d) { audio(); sound("set"); playPart(it, +d.dataset.k); } };
+  dt.onclick = async (e) => {                   // tocco sull'onda: parte da quel punto; altrove sull'audio: suona/ferma
+    const d = e.target.closest(".part[data-k]"); if (!d) return; audio(); sound("set");
+    if (e.target.tagName === "CANVAS") { const r = e.target.getBoundingClientRect(); await tapeSeek(it, +d.dataset.k, (e.clientX - r.left) / r.width, true); }
+    else playPart(it, +d.dataset.k);
+  };
   sound("set"); d1();
 }
 function audioInView() {                       // l'audio più vicino al centro della nota visibile
@@ -629,16 +633,28 @@ function tapeStop() { if (!player) return; if (player.src) try { player.src.stop
 function tapePlay() { if (!player) return; if (player.pos >= player.dur - 0.05) player.pos = 0; player.playing = true; tapeRun(); }
 function tapePause() { if (player) player.playing = false; }
 function tapeScrub(px) { if (!player) return; player.vel = Math.max(-8, Math.min(8, player.vel + px * 0.025)); tapeRun(); }
-async function playPart(it, k) {
-  if (player && player.it === it && player.k === k) { player.playing ? tapePause() : tapePlay(); return; }
+let tapeLoading = null;
+async function tapeLoad(it, k) {                 // carica il nastro fermo (per lo scrubbing senza play)
+  if (player && player.it === it && player.k === k) return player;
+  if (tapeLoading) { await tapeLoading; if (player && player.it === it && player.k === k) return player; }
+  tapeLoading = playPart(it, k, true); await tapeLoading; tapeLoading = null; return player && player.it === it && player.k === k ? player : null;
+}
+async function tapeSeek(it, k, f, play) {        // sposta la testina a una frazione del nastro
+  const P = await tapeLoad(it, k); if (!P) return;
+  if (P.src) { try { P.src.stop(); } catch (e) {} P.src = null; } P.dir = 0; P.rate = 0; P.vel = 0;
+  P.pos = Math.max(0, Math.min(P.dur - 0.05, f * P.dur)); P.playing = !!play;
+  drawWave(P.cv, P.peaks, P.pos / P.dur || 0.0001, P.marks, P.dur); P.tl.textContent = clock(P.pos) + " / " + clock(P.dur); if (play) tapeRun();
+}
+async function playPart(it, k, paused) {
+  if (player && player.it === it && player.k === k) { if (paused) return; player.playing ? tapePause() : tapePlay(); return; }
   tapeStop(); const a = audio(); if (!a) return;
   const p = parts(it)[k], part = $("detail").querySelector('.part[data-k="' + k + '"]'); if (!part) return;
   let buf; try { buf = await a.decodeAudioData(await p.blob.arrayBuffer()); } catch (e) { flash("Audio non leggibile"); sound("stop"); return; }
   const rev = a.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
   for (let ch = 0; ch < buf.numberOfChannels; ch++) { const s0 = buf.getChannelData(ch), d = rev.getChannelData(ch), n = s0.length; for (let i = 0; i < n; i++) d[i] = s0[n - 1 - i]; }
   const out = a.createGain(); out.connect(a.destination);
-  player = { it, k, buf, rev, out, src: null, dir: 0, pos: 0, rate: 0, vel: 0, playing: true, dur: buf.duration, last: 0, raf: 0, cv: part.querySelector("canvas"), tl: part.querySelector(".fl"), peaks: p.peaks };
-  tapeRun();
+  player = { it, k, buf, rev, out, src: null, dir: 0, pos: 0, rate: 0, vel: 0, playing: !paused, dur: buf.duration, last: 0, raf: 0, cv: part.querySelector("canvas"), tl: part.querySelector(".fl"), peaks: p.peaks, marks: p.marks };
+  if (!paused) tapeRun();
 }
 function tapeRun() {
   const P = player; if (!P || P.raf) return; P.last = performance.now();
@@ -656,7 +672,7 @@ function tapeRun() {
       if (dir) { const s = a.createBufferSource(); s.buffer = dir > 0 ? P.buf : P.rev; s.playbackRate.value = Math.abs(P.rate); s.connect(P.out); s.start(0, dir > 0 ? P.pos : P.dur - P.pos); P.src = s; }
       P.dir = dir;
     } else if (P.src) P.src.playbackRate.value = Math.abs(P.rate);
-    drawWave(P.cv, P.peaks, P.pos / P.dur); P.tl.textContent = clock(P.pos) + " / " + clock(P.dur);
+    drawWave(P.cv, P.peaks, P.pos / P.dur || 0.0001, P.marks, P.dur); P.tl.textContent = clock(P.pos) + " / " + clock(P.dur);
     if (!P.playing && !dir && Math.abs(P.vel) < 0.02) { P.raf = 0; P.rate = 0; return; }
     P.raf = requestAnimationFrame(tick);
   };
@@ -684,7 +700,7 @@ async function storageCheck() {
 let evEdit = null;                                    // nota di una cartella calendar: data dell'evento in modifica
 const pre = () => (qf ? qf + "  " : "");
 M.consulta = {
-  lab() { const d = new Date(); return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + pad(d.getFullYear() % 100); },   // data di oggi, fissa
+  lab() { const d = new Date(); return pad(d.getDate()) + " " + pad(d.getMonth() + 1) + " " + pad(d.getFullYear() % 100); },   // data di oggi, fissa, in grassetto
   leave() { if (inDetail) closeDetail(); evEdit = null; },
   scroll(px) {                                 // ghiera: scorrimento continuo; con l'audio in riproduzione trascina il nastro
     if (evEdit) return null;
@@ -694,7 +710,8 @@ M.consulta = {
   dial(d) { if (evEdit) { evEdit.t = new Date(evEdit.t.getFullYear(), evEdit.t.getMonth(), evEdit.t.getDate() + d, evEdit.t.getHours(), evEdit.t.getMinutes()); d1(); return true; } return inDetail ? detailDial(d) : setSel(sel + d); },
   sdial(d) {                                   // Shift + ghiera: cambia cartella (o l'ora dell'evento)
     if (evEdit) { evEdit.t = new Date(evEdit.t.getTime() + d * 15 * 60000); d1(); return true; }
-    return inDetail ? detailDial(d * 5) : assignFolder(d);
+    if (inDetail) { const k = audioInView(); if (k == null) return detailDial(d * 5); const it = cur(); tapeLoad(it, k).then((P) => P && tapeScrub(d * 30)); return true; }   // nastro anche da fermo
+    return assignFolder(d);
   },
   tap(z) {                                     // ghiera cliccata: su/giù nota, sx/dx filtro cartella
     if (evEdit) return false;
@@ -725,7 +742,7 @@ M.consulta = {
 };
 
 /* ---- CALENDARIO ---- */
-let calDay = new Date();
+let calDay = new Date(), capDay = null;           // capDay: la prossima nota catturata va in quel giorno (dal calendario)
 const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
 const evItems = () => items.filter((i) => i.when && ftype(i) === "calendar");
 function dayCount(d) { const k = ymd(d); return items.filter((i) => i.name.startsWith(k)).length; }
@@ -746,7 +763,7 @@ M.calendario = {
   enter() { const it = cur(); if (it) calDay = ymdDate(it.name.slice(0, 6)); showPane("cal"); renderCal(); },
   dial(d) { calDay = new Date(calDay.getFullYear(), calDay.getMonth(), calDay.getDate() + d); renderCal(); return true; },
   sdial(d) { calDay = new Date(calDay.getFullYear(), calDay.getMonth() + d, Math.min(calDay.getDate(), 28)); renderCal(); return true; },
-  center() { this.shift(); },
+  center() { capDay = new Date(calDay.getFullYear(), calDay.getMonth(), calDay.getDate(), 12); setMode(S.lastCap || "registra"); sound("menu"); d1(); },   // cattura per quel giorno
   shift() {
     const k = ymd(calDay); let i = items.findIndex((x) => x.name.startsWith(k));
     if (i < 0) i = items.findIndex((x) => x.when && ftype(x) === "calendar" && ymd(whenDate(x.when)) === k);
@@ -811,8 +828,42 @@ M.cartelle = {
 function renderFeedKeep() { const it = cur(); renderFeed(); if (it) setSel(Math.max(0, vis().indexOf(it)), true); }
 
 /* ---- EDIT ---- */
-const EDIT_ACT = [["testo", "modifica testo"], ["audio", "aggiungi audio"], ["foto", "aggiungi foto"], ["pagine", "aggiungi pagine"], ["ordine", "ordine pagine"], ["file", "aggiungi file"], ["filtro", "filtro scansione"]];
-const PF = ["type", "ext", "mime", "blob", "text", "filter", "peaks", "dur", "orig"];
+const EDIT_ACT = [["testo", "modifica testo"], ["audio", "aggiungi audio"], ["foto", "aggiungi foto"], ["pagine", "aggiungi pagine"], ["ordine", "ordine pagine"], ["file", "aggiungi file"], ["filtro", "filtro scansione"], ["data", "cambia data"], ["unisci", "unisci audio"]];
+const PF = ["type", "ext", "mime", "blob", "text", "filter", "peaks", "dur", "orig", "marks"];
+const dmy = (d) => pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + pad(d.getFullYear() % 100);
+async function renameItem(it, d) {               // nuova data = nuovo nome (e nuova posizione nel feed); la chiave di sincronizzazione non cambia
+  if (ymd(d) === it.name.slice(0, 6)) return false;
+  const old = it.name; it.name = nextName(d);
+  for (const k of [...urls.keys()]) if (k.startsWith(old + "#")) { URL.revokeObjectURL(urls.get(k)); urls.delete(k); }
+  await tx("readwrite", (s) => s.delete(old)); await dbPut(it);
+  sortItems(); renderFeed(); setSel(Math.max(0, vis().indexOf(it)), true); flash(old + " → " + it.name); return true;
+}
+function wavOf(pcm, R) {                          // PCM mono 16 bit
+  const b = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(b), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, R, true); v.setUint32(28, R * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 32767, true);
+  return new Blob([b], { type: "audio/wav" });
+}
+async function mergeAudio(it, ks) {              // concatena gli audio della nota (o quelli indicati) in un unico file, segni compresi
+  const P = parts(it); ks = ks || P.map((p, k) => (p.type === "audio" ? k : -1)).filter((k) => k >= 0); if (ks.length < 2) return false;
+  const a = audio(), R = 24000, segs = [], marks = []; let off = 0, n = 0;
+  for (const k of ks) {
+    const b = await new Promise((res, rej) => P[k].blob.arrayBuffer().then((ab) => a.decodeAudioData(ab, res, rej)));
+    const ch = []; for (let c = 0; c < b.numberOfChannels; c++) ch.push(b.getChannelData(c));
+    const m = Math.round(b.duration * R), out = new Float32Array(m), st = b.sampleRate / R;
+    for (let i = 0; i < m; i++) { const f = i * st, j = Math.floor(f), t = f - j; let v = 0; for (const d of ch) v += (d[j] || 0) * (1 - t) + (d[j + 1] || 0) * t; out[i] = v / ch.length; }
+    for (const t of P[k].marks || []) marks.push(+(t + off).toFixed(2));
+    segs.push(out); n += m; off += b.duration;
+  }
+  const pcm = new Float32Array(n); let o = 0; for (const sg of segs) { pcm.set(sg, o); o += sg.length; }
+  const NB = 160, step = Math.max(1, Math.floor(n / NB)), pk = []; for (let i = 0; i < NB; i++) { let m = 0; for (let j = i * step; j < (i + 1) * step && j < n; j += 8) m = Math.max(m, Math.abs(pcm[j])); pk.push(m); }
+  const mx = Math.max(...pk, 0.01), np = { type: "audio", ext: "wav", mime: "audio/wav", blob: wavOf(pcm, R), dur: off, peaks: pk.map((v) => +(v / mx).toFixed(2)), orig: "unione" };
+  if (marks.length) np.marks = marks;
+  const L = P.slice(); L[ks[0]] = np; for (const k of ks.slice(1).sort((x, y) => y - x)) L.splice(k, 1);
+  if (player && player.it === it) tapeStop(); await setParts(it, L); renderFeed(); setSel(Math.max(0, vis().indexOf(it)), true); return true;
+}
+let DT = null;                                     // cambia data: { it, d }
 async function setParts(it, list) {               // riscrive le parti di una nota nel nuovo ordine (la prima è la nota stessa)
   const L = list.map((p) => { const o = {}; for (const f of PF) if (p[f] !== undefined) o[f] = p[f]; return o; });
   for (const f of PF) delete it[f]; Object.assign(it, L[0]); it.att = L.slice(1); if (!it.att.length) delete it.att;
@@ -825,8 +876,9 @@ function renderRO(full) {                        // anteprime 3×3: 9 pagine all
   if (!full && RO.from === from && dt.querySelector(".rog")) { dt.querySelectorAll(".pg").forEach((el, i) => el.classList.toggle("ro", from + i === RO.k)); d1(); return; }   // solo la selezione: immediato
   RO.from = from; dt.innerHTML = ""; dt.scrollTop = 0; showPane("detail");
   const g = document.createElement("div"); g.className = "rog"; dt.appendChild(g);
-  for (let k = from; k < Math.min(P.length, from + 9); k++) {
+  for (let k = from; k < Math.min(P.length + 1, from + 9); k++) {
     const p = P[k], pg = document.createElement("div"); pg.className = "pg" + (k === RO.k ? " ro" : "");
+    if (!p) { const th = document.createElement("div"); th.className = "th add"; th.textContent = "+"; pg.appendChild(th); const n = document.createElement("div"); n.className = "n"; n.textContent = "aggiungi"; pg.appendChild(n); g.appendChild(pg); continue; }   // in fondo: aggiungi pagine
     const th = document.createElement("div"); th.className = "th"; pg.appendChild(th);
     if (p.type === "image") { const im = new Image(); im.alt = ""; th.appendChild(im); if (p.filter && p.filter !== "originale") { if (p.filter !== "migliorato") im.classList.add("inv"); filteredUrl(it, k).then((u) => (im.src = u)).catch(() => (im.src = urlOf(it, k))); } else im.src = urlOf(it, k); }
     else th.textContent = p.type === "text" ? "testo" : p.type;
@@ -837,12 +889,13 @@ function renderRO(full) {                        // anteprime 3×3: 9 pagine all
 }
 let editAct = 0, confirmDel = false, editTarget = null;
 M.edit = {
-  enter() { confirmDel = false; RO = null; },
-  leave() { if (RO) { RO = null; showPane("feed"); } },
-  dial(d) { if (RO) { const n = parts(RO.it).length, j = RO.k + d; if (j < 0 || j >= n) return false; RO.k = j; renderRO(); return true; } confirmDel = false; return setSel(sel + d); },
+  enter() { confirmDel = false; RO = null; DT = null; },
+  leave() { if (RO) { RO = null; showPane("feed"); } DT = null; },
+  dial(d) { if (DT) { DT.d = new Date(DT.d.getFullYear(), DT.d.getMonth(), DT.d.getDate() + d); d1(); return true; } if (RO) { const n = parts(RO.it).length, j = RO.k + d; if (j < 0 || j > n) return false; RO.k = j; RO.del = false; renderRO(); return true; } confirmDel = false; return setSel(sel + d); },
   async sdial(d) {
+    if (DT) { DT.d = new Date(DT.d.getFullYear(), DT.d.getMonth() + d, Math.min(DT.d.getDate(), 28)); d1(); return true; }   // Shift + ghiera: mese
     if (RO) {                                     // Shift + ghiera: sposta la pagina scelta
-      const L = parts(RO.it).slice(), j = RO.k + d; if (j < 0 || j >= L.length) return false;
+      const L = parts(RO.it).slice(), j = RO.k + d; if (j < 0 || j >= L.length || RO.k >= L.length) return false; RO.del = false;
       [L[RO.k], L[j]] = [L[j], L[RO.k]]; RO.k = j;
       const g = $("detail").querySelectorAll(".pg"), a = g[j - RO.from], b = g[j - d - RO.from];   // scambia subito le anteprime, poi salva
       if (a && b && Math.floor(j / 9) * 9 === RO.from) { const ta = a.querySelector(".th"), tb = b.querySelector(".th"), m = document.createComment(""); a.replaceChild(m, ta); b.replaceChild(ta, tb); a.replaceChild(tb, m); renderRO(); } else renderRO(true);
@@ -850,23 +903,40 @@ M.edit = {
     }
     confirmDel = false; editAct = (editAct + d + EDIT_ACT.length) % EDIT_ACT.length; d1(); return true;
   },
-  center() { if (RO) { this.shift(); return; } this.sdial(1); sound("browse"); },
+  async center() {
+    if (DT) { DT = null; sound("menu"); d1(); return; }
+    if (RO) {                                     // centro su una pagina: eliminala (premi due volte)
+      const P = parts(RO.it); if (RO.k >= P.length) { this.shift(); return; }
+      if (P.length < 2 || (RO.k === 0 && P[1].type !== P[0].type)) { flash("Pagina non eliminabile"); sound("stop"); return; }
+      if (!RO.del) { RO.del = true; d1(); sound("stop"); return; }
+      RO.del = false; const L = P.slice(); L.splice(RO.k, 1); await setParts(RO.it, L); RO.k = Math.min(RO.k, L.length - 1); renderRO(true); sound("act"); return;
+    } this.sdial(1); sound("browse"); },
   async shift() {
-    if (RO) { const it = RO.it; RO = null; showPane("feed"); renderFeed(); setSel(Math.max(0, vis().indexOf(it)), true); sound("act"); return; }
+    if (DT) { const { it, d } = DT; DT = null; if (await renameItem(it, d)) sound("act"); else { sound("menu"); d1(); } return; }
+    if (RO) {
+      const it = RO.it, add = RO.k >= parts(it).length; RO = null; showPane("feed"); renderFeed(); setSel(Math.max(0, vis().indexOf(it)), true);
+      if (add) { setMode("scansione"); SC.doc = it; SC.pages = parts(it).length; SC.ret = "edit"; d1(); return; }   // "+": nuove pagine dalla fotocamera
+      sound("act"); return;
+    }
     const it = cur(), a = EDIT_ACT[editAct][0]; if (!it) { sound("stop"); return; }
     if (a === "testo") { flash("Ruota il telefono"); sound("set"); }
     else if (a === "audio") { rec ? recStop() : recStart(it); }
     else if (a === "foto") { setMode("foto"); FS.target = it; FS.ret = "edit"; d1(); }   // fotocamera dell'app
     else if (a === "pagine") { setMode("scansione"); SC.doc = it; SC.pages = parts(it).length; SC.ret = "edit"; d1(); }
-    else if (a === "ordine") { if (parts(it).length < 2) { sound("stop"); return; } RO = { it, k: 0 }; renderRO(); sound("set"); }
+    else if (a === "ordine") { RO = { it, k: 0, del: false }; renderRO(); sound("set"); }
     else if (a === "file") { pickTarget = it; pick("", false); }
     else if (a === "filtro") {
       const sc = parts(it).filter((p) => p.filter); if (!sc.length) { sound("stop"); return; }
       const nf = FILTERS[(FILTERS.indexOf(sc[0].filter) + 1) % FILTERS.length]; sc.forEach((p) => (p.filter = nf));
       await dbPut(it); renderFeed(); flash(it.name + "  " + nf); sound("set");
     }
+    else if (a === "data") { DT = { it, d: ymdDate(it.name.slice(0, 6)) }; sound("set"); d1(); }
+    else if (a === "unisci") {
+      if (parts(it).filter((p) => p.type === "audio").length < 2) { flash("Servono due audio"); sound("stop"); return; }
+      flash("Unisco…"); try { await mergeAudio(it); flash(it.name + "  audio unito"); sound("act"); } catch (e) { flash("Audio non leggibile"); sound("stop"); }
+    }
   },
-  d1() { if (RO) return "pagina " + (RO.k + 1) + "/" + parts(RO.it).length; return confirmDel ? "conferma?" : EDIT_ACT[editAct][1]; },
+  d1() { if (DT) return "data " + dmy(DT.d) + "  shift conferma"; if (RO) { const n = parts(RO.it).length; return RO.k >= n ? "aggiungi pagine" : RO.del ? "elimina pagina " + (RO.k + 1) + "?" : "pagina " + (RO.k + 1) + "/" + n; } return confirmDel ? "conferma?" : EDIT_ACT[editAct][1]; },
 };
 
 /* ---- ELIMINA: ghiera sceglie la voce, Shift + ghiera la parte (tutto o un allegato), Shift due volte elimina ---- */
@@ -947,7 +1017,15 @@ async function peaksOf(blob) {
 
 /* ---- REGISTRA (anche "aggiungi audio" in EDIT) ---- */
 let rec = null;
-async function recStart(target) {
+const recEl = () => (rec ? (performance.now() - rec.t0 - rec.pz - (rec.paused ? performance.now() - rec.pAt : 0)) / 1000 : 0);   // tempo registrato, pause escluse
+function recPause(on, vor) {                     // pausa / ripresa (anche automatica col VOR)
+  const r = rec; if (!r || r.paused === on) return;
+  try { on ? r.mr.pause() : r.mr.resume(); } catch (e) { flash("Pausa non disponibile"); sound("stop"); return; }
+  if (on) { r.paused = true; r.pAt = performance.now(); r.vorP = !!vor; } else { r.pz += performance.now() - r.pAt; r.paused = false; r.vorP = false; r.quiet = performance.now(); }
+  $("led").classList.toggle("pause", on); if (!vor) sound(on ? "menu" : "set"); d1();
+}
+function recMark() { if (!rec) return false; rec.marks.push(+recEl().toFixed(2)); flash("segno " + rec.marks.length + "  " + clock(recEl())); sound("set"); return true; }
+async function recStart(target, append) {
   try {
     const a = audio(); if (a && a.state !== "running") await a.resume();
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -955,22 +1033,26 @@ async function recStart(target) {
     const mr = new MediaRecorder(stream, { mimeType: mime }), chunks = [];
     if (a.state !== "running") await a.resume();
     const src = a.createMediaStreamSource(stream), an = a.createAnalyser(); an.fftSize = 1024; src.connect(an);
-    rec = { mr, stream, an, src, chunks, mime, target, t0: performance.now(), peaks: [], buf: new Float32Array(an.fftSize), last: 0, name: target ? target.name : nextName() };
+    rec = { mr, stream, an, src, chunks, mime, target, append: !!append, t0: performance.now(), pz: 0, paused: false, pAt: 0, vorP: false, quiet: performance.now(), marks: [], vor: !target || append ? !!S.vor : false, peaks: [], buf: new Float32Array(an.fftSize), last: 0, name: target ? target.name : nextName(capDay || undefined) };
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     mr.start(250); $("led").classList.add("rec"); sound("act"); meter();
   } catch (e) { rec = null; flash("Microfono non disponibile"); sound("stop"); }
 }
 function recStop() {
-  const r = rec; if (!r) return; rec = null;
+  const r = rec; if (!r) return; const el = recEl(); rec = null; $("led").classList.remove("pause");
   r.mr.onstop = async () => {
     r.stream.getTracks().forEach((t) => t.stop()); try { r.src.disconnect(); } catch (e) {}
     const blob = new Blob(r.chunks, { type: r.mime });
-    let peaks = null, dur = (performance.now() - r.t0) / 1000;
+    let peaks = null, dur = el;
     const dec = await peaksOf(blob);                     // la waveform si ricava dal file: affidabile anche su iPhone
     if (dec && dec.dur) { peaks = dec.peaks; dur = dec.dur; }
     else if (r.peaks.length) { const n = 160, out = []; for (let i = 0; i < n; i++) { const s = r.peaks.slice(Math.floor((i * r.peaks.length) / n), Math.floor(((i + 1) * r.peaks.length) / n) || 1); out.push(s.length ? Math.max(...s) : 0); } const mx = Math.max(...out, 0.01); peaks = out.map((v) => +(v / mx).toFixed(2)); }
     const part = { type: "audio", ext: r.mime === "audio/mp4" ? "m4a" : "webm", mime: r.mime, blob, dur, peaks };
-    if (r.target) await attach(r.target, part); else await addItem(Object.assign({ name: r.name }, part));
+    if (r.marks.length) part.marks = r.marks;
+    let it = r.target, prev = it && items.includes(it) ? parts(it).map((p, k) => (p.type === "audio" ? k : -1)).filter((k) => k >= 0).pop() : undefined, off = 0;
+    if (it && items.includes(it)) { if (r.append && prev != null) off = parts(it)[prev].dur || 0; await attach(it, part); } else it = await addItem(Object.assign({ name: r.name }, part));
+    if (r.marks.length) await attach(it, { type: "text", ext: "txt", mime: "text/plain", orig: "segni", text: "segni " + it.name + "\n" + r.marks.map((t, i) => (i + 1) + "  " + clock(t + off)).join("\n") });   // segni come file di testo
+    if (r.append && prev != null) { try { const P = parts(it), k = P.indexOf(part); await mergeAudio(it, [prev, k]); flash(it.name + "  audio accodato"); } catch (e) { flash("Audio non unito"); } }
   };
   r.mr.stop(); $("led").classList.remove("rec"); sound("act"); d1();
 }
@@ -982,6 +1064,10 @@ function meter() {
   let sq = 0; for (const v of r.buf) sq += v * v;
   const db = 20 * Math.log10(Math.sqrt(sq / r.buf.length) + 1e-6), lv = Math.max(0, Math.min(1, (db + 54) / 48));
   r.lv = Math.max(lv, (r.lv || 0) * 0.9);         // discesa lenta come un VU
+  if (r.vor) {                                     // VOR: si ferma nel silenzio (1,5 s) e riparte con la voce
+    const now = performance.now(); if (db > -44) r.quiet = now;
+    if (!r.paused && now - r.quiet > 1500) recPause(true, true); else if (r.paused && r.vorP && db > -44) recPause(false, true);
+  }
   const w = d1c.clientWidth, h = d1c.clientHeight;
   if (w) {
     if (d1c.width !== Math.round(w * DPR)) { d1c.width = Math.round(w * DPR); d1c.height = Math.round(h * DPR); }
@@ -992,11 +1078,16 @@ function meter() {
   if (performance.now() - r.last > 250) { r.last = performance.now(); d1(); } else drawD1();
   requestAnimationFrame(meter);
 }
-M.registra = {
-  dial(d) { return setSel(sel + d); }, sdial(d) { return jumpDay(d); },
-  center() { if (!rec) openDetailFrom(); },
-  shift() { rec ? recStop() : recStart(null); },
-  d1() { return ""; },
+M.registra = {                                    // Shift: avvia/ferma. In registrazione: centro = pausa, corona = segno. Da fermo: corona sx/dx = VOR, Shift+ghiera = nuova/accoda
+  dial(d) { return rec ? false : setSel(sel + d); },
+  sdial(d) { if (rec) return false; S.recApp = !S.recApp; saveS(); d1(); return true; },
+  tap(z) { if (rec) return recMark(); if (z === "l" || z === "r") { S.vor = !S.vor; saveS(); d1(); return true; } return setSel(sel + (z === "u" ? -1 : 1)); },
+  center() { if (rec) { recPause(!rec.paused); return; } openDetailFrom(); },
+  shift() { if (rec) { recStop(); return; } const it = cur(); if (S.recApp && !it) { sound("stop"); return; } recStart(S.recApp ? it : null, S.recApp); },
+  d1() {
+    if (rec) return [rec.paused ? (rec.vorP ? "vor" : "pausa") : "", rec.marks.length ? "segni " + rec.marks.length : ""].filter(Boolean).join("  ");
+    const it = cur(); return (S.vor ? "vor  " : "") + (S.recApp ? "accoda " + (it ? it.name : "") : "nuova nota");
+  },
   leave() {},
 };
 function openDetailFrom() { setMode("consulta"); openDetail(); }
@@ -1014,7 +1105,7 @@ async function camStart() {
   camBusy = false; applyCam();
 }
 function camStop() { if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; track = null; vid.srcObject = null; cam.classList.remove("frozen"); }
-document.addEventListener("visibilitychange", () => { if (document.hidden) { camStop(); if (rec) recStop(); } else if (mode === "foto" || mode === "scansione") camStart(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { camStop(); lcamStop(); if (rec) recStop(); } else if (mode === "foto" || mode === "scansione") camStart(); });
 function coverMap() {                          // coordinate del fotogramma → coordinate del riquadro (object-fit: cover)
   const vw = vid.videoWidth || 1, vh = vid.videoHeight || 1, W = cam.clientWidth, H = cam.clientHeight, z = mode === "foto" ? FS.zoomSoft : 1, s = (mode === "foto" ? Math.min(W / vw, H / vh) : Math.max(W / vw, H / vh)) * z;
   return { s, ox: (W - vw * s) / 2, oy: (H - vh * s) / 2 };
@@ -1044,8 +1135,12 @@ function applyCam() {
 function drawFotoOv() {
   const c = sizeOv(); c.clearRect(0, 0, ov.width, ov.height);
   if (mode !== "foto" || !FS.grid) return;
-  c.fillStyle = "#fff"; const W = ov.width, H = ov.height;
-  for (const f of [1 / 3, 2 / 3]) { c.fillRect(Math.round(W * f), 0, DPR, H); c.fillRect(0, Math.round(H * f), W, DPR); }
+  // griglia sul fotogramma che verrà salvato (mirino in contain: bande nere escluse; con lo zoom digitale resta il centro)
+  const vw = vid.videoWidth, vh = vid.videoHeight; if (!vw) { setTimeout(drawFotoOv, 300); return; }
+  const m = coverMap(), W = cam.clientWidth, H = cam.clientHeight, fw = Math.min(W, (vw * m.s) / FS.zoomSoft), fh = Math.min(H, (vh * m.s) / FS.zoomSoft);
+  const x0 = ((W - fw) / 2) * DPR, y0 = ((H - fh) / 2) * DPR, w = fw * DPR, h = fh * DPR;
+  c.fillStyle = "#fff";
+  for (const f of [1 / 3, 2 / 3]) { c.fillRect(Math.round(x0 + w * f), Math.round(y0), DPR, Math.round(h)); c.fillRect(Math.round(x0), Math.round(y0 + h * f), Math.round(w), DPR); }
 }
 async function grabFrame(soft) {                 // fotogramma alla risoluzione piena del flusso
   const vw = vid.videoWidth, vh = vid.videoHeight; if (!vw) throw new Error("mirino non pronto");
@@ -1086,7 +1181,7 @@ M.foto = {
 };
 
 /* ---- SCANSIONE: mirino con contorno del foglio, poi raddrizzamento regolabile ---- */
-const SC = { doc: null, pages: 0, quad: null, live: null, seen: 0, frozen: false, src: null, drag: -1, timer: 0, queue: [], srcMode: "camera" };
+const SC = { doc: null, pages: 0, quad: null, live: null, seen: 0, frozen: false, src: null, drag: -1, timer: 0, queue: [], srcMode: "camera", rev: false, saved: 0 };   // queue: scatti da ritagliare (prima tutti gli scatti, poi il ritaglio)
 const FILTERS = ["migliorato", "grigi", "bn", "originale"];
 const lv = $("lv");
 /* Mirino: contorno del foglio e filtro dal vivo, calcolati su un fotogramma ridotto */
@@ -1157,23 +1252,26 @@ ov.addEventListener("pointermove", (e) => {
 function freezeScan(src, quad) { SC.sel = { t: "c", i: 0 }; SC.src = src; SC.quad = quad || fullQuad(src.width, src.height); /* parte sempre rettangolare */ SC.frozen = true; cam.classList.add("frozen"); drawStill(); drawScanOv(); d1(); }
 function unfreezeScan() {
   SC.frozen = false; cam.classList.remove("frozen"); freeCanvas(SC.src); SC.src = null;
-  if (SC.queue.length) nextImport(); else drawScanOv();
+  if (SC.rev && SC.queue.length) { nextImport(); return; }
+  if (SC.rev) { SC.rev = false; if (SC.saved) flash("Salvate " + SC.saved + (SC.saved === 1 ? " pagina" : " pagine")); SC.saved = 0; if (SC.ret && SC.doc) { M.scansione.center(); return; } }
+  drawScanOv(); d1();
 }
+function startReview() { if (!SC.queue.length || SC.frozen) return false; SC.rev = true; SC.saved = 0; nextImport(); return true; }
 /* Importa immagini esistenti: ognuna passa dal ritaglio regolabile come una foto */
 async function loadImage(f) {
   const bm = await createImageBitmap(f), k = Math.min(1, 4032 / Math.max(bm.width, bm.height));
   const c = canvasOf(Math.round(bm.width * k), Math.round(bm.height * k)); c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height); bm.close && bm.close(); return c;
 }
 async function nextImport() {
-  const f = SC.queue.shift(); if (!f) return;
-  try { freezeScan(await loadImage(f)); sound("set"); } catch (e) { flash("Immagine non leggibile"); sound("stop"); if (SC.queue.length) nextImport(); }
+  const f = SC.queue.shift(); if (!f) { unfreezeScan(); return; }
+  try { freezeScan(await loadImage(await f)); sound("set"); } catch (e) { flash("Immagine non leggibile"); sound("stop"); if (SC.queue.length) nextImport(); else { SC.rev = false; d1(); } }
 }
 const fimg = document.createElement("input"); fimg.type = "file"; fimg.accept = "image/*"; fimg.multiple = true;
-fimg.addEventListener("change", () => { SC.queue = [...fimg.files]; fimg.value = ""; if (mode === "scansione" && !SC.frozen) nextImport(); });
+fimg.addEventListener("change", () => { SC.queue.push(...fimg.files); fimg.value = ""; if (mode === "scansione" && !SC.frozen) startReview(); });
 M.scansione = {
-  enter() { showPane("cam"); vid.style.transform = ""; vid.style.filter = ""; SC.srcMode = "camera"; camStart().then(() => scanLoop()); },
-  leave() { clearTimeout(SC.timer); SC.frozen = false; SC.queue = []; SC.live = null; SC.doc = null; SC.ret = null; SC.pages = 0; freeCanvas(SC.src); SC.src = null; camStop(); cam.classList.remove("live", "frozen"); sizeOv().clearRect(0, 0, ov.width, ov.height); },
-  dial(d) { const i = FILTERS.indexOf(S.scanFilter); S.scanFilter = FILTERS[(i + d + FILTERS.length) % FILTERS.length]; saveS(); if (SC.frozen) drawStill(); d1(); return true; },
+  enter() { showPane("cam"); vid.style.transform = ""; vid.style.filter = ""; SC.srcMode = "camera"; cam.classList.remove("live"); camStart(); },   // scatto senza filtro: resta fluido
+  leave() { clearTimeout(SC.timer); SC.frozen = false; SC.queue = []; SC.rev = false; SC.saved = 0; SC.live = null; SC.doc = null; SC.ret = null; SC.pages = 0; freeCanvas(SC.src); SC.src = null; camStop(); cam.classList.remove("live", "frozen"); sizeOv().clearRect(0, 0, ov.width, ov.height); },
+  dial(d) { if (!SC.frozen) return false; const i = FILTERS.indexOf(S.scanFilter); S.scanFilter = FILTERS[(i + d + FILTERS.length) % FILTERS.length]; saveS(); if (SC.frozen) drawStill(); d1(); return true; },
   sdial(d) { SC.srcMode = SC.srcMode === "camera" ? "importa" : "camera"; d1(); return true; },   // Shift + ghiera: fotocamera o importa
   pad(dx, dy) {                               // ghiera come trackpad sull'angolo/lato scelto
     if (dx === undefined) return SC.frozen;
@@ -1186,29 +1284,32 @@ M.scansione = {
     const C = { ul: 0, ur: 1, dr: 2, dl: 3 }, L = { u: 0, r: 1, d: 2, l: 3 };
     SC.sel = z8 in C ? { t: "c", i: C[z8] } : { t: "s", i: L[z8] }; drawScanOv(); d1(); return true;
   },
-  center() {                                  // scarta il fotogramma, oppure chiude il documento
-    if (SC.frozen) { unfreezeScan(); sound("menu"); }
+  center() {                                  // scatti fatti → ritaglio; nel ritaglio scarta lo scatto; altrimenti chiude il documento
+    if (SC.frozen) { unfreezeScan(); sound("menu"); return; }
+    if (startReview()) { sound("set"); return; }
     else if (SC.ret) { const r = SC.ret, it = SC.doc; SC.ret = null; setMode(r); if (it) setSel(Math.max(0, vis().indexOf(it)), true); sound("menu"); return; }   // torna in EDIT
     else if (SC.doc) { flash("Chiuso " + SC.doc.name); SC.doc = null; SC.pages = 0; sound("menu"); }
     d1();
   },
   async shift() {
     try {
-      if (!SC.frozen) {                       // 1. congela e propone il contorno, regolabile trascinando gli angoli
+      if (!SC.frozen) {                       // 1. scatto: si mette da parte (JPEG) e si continua; il ritaglio viene dopo
         if (SC.srcMode === "importa") { fimg.click(); sound("set"); return; }
-        freezeScan(await grabFrame(false)); sound("set"); return;
+        const c = await grabFrame(false); SC.queue.push(toBlob(c, 0.92).finally(() => freeCanvas(c)));
+        cam.classList.add("snap"); setTimeout(() => cam.classList.remove("snap"), 120); sound("act"); d1(); return;
       }
       flash("Raddrizzo…"); await new Promise((r) => setTimeout(r, 30));   // 2. raddrizza, filtra e salva la pagina
       const img = warp(SC.src, SC.quad, 2400);            // si salva solo ritagliata e raddrizzata: il filtro resta un'informazione
       const c = canvasOf(img.width, img.height); c.getContext("2d").putImageData(img, 0, 0); const b = await toBlob(c, 0.92); freeCanvas(c);
       const part = { type: "image", ext: "jpg", mime: "image/jpeg", blob: b, filter: S.scanFilter };
       if (SC.doc && items.includes(SC.doc)) await attach(SC.doc, part); else SC.doc = await addItem(Object.assign({}, part));
-      SC.pages = parts(SC.doc).length; unfreezeScan(); d1();
+      SC.pages = parts(SC.doc).length; SC.saved++; unfreezeScan(); d1();
     } catch (e) { flash("Errore: " + (e.message || e)); sound("stop"); }
   },
   d1() {
     const se = SC.sel || { t: "c", i: 0 }, EL = ["angolo alto sx", "angolo alto dx", "angolo basso dx", "angolo basso sx"], SL = ["lato alto", "lato destro", "lato basso", "lato sinistro"];
-    return "p." + (SC.pages + 1) + "  " + S.scanFilter + (SC.frozen ? "  " + (se.t === "c" ? EL[se.i] : SL[se.i]) : SC.srcMode === "importa" ? "  importa" : "");
+    if (SC.frozen) return "p." + (SC.pages + 1) + "  " + S.scanFilter + "  " + (se.t === "c" ? EL[se.i] : SL[se.i]) + (SC.queue.length ? "  +" + SC.queue.length : "");
+    const n = SC.queue.length; return (SC.pages ? "p." + SC.pages + "  " : "") + (n ? n + (n === 1 ? " scatto" : " scatti") : "nessuno scatto") + (SC.srcMode === "importa" ? "  importa" : "");
   },
 };
 
@@ -1223,7 +1324,7 @@ M.file = {
   async shift() {
     if (!fileCur) { pickTarget = null; pick("", false); return; }
     const f = fileCur, p = await partFromFile(f);
-    await addItem(Object.assign({ name: nextName(fileDate), created: fileDate.getTime() }, p)); fileNext();
+    await addItem(Object.assign({ name: nextName(capDay || fileDate), created: fileDate.getTime() }, p)); fileNext();
   },
   d1() { return fileCur ? nextName(fileDate) + "  " + fileCur.name : nextName(); },
 };
@@ -1317,7 +1418,7 @@ function newPc(cert) {
 }
 function useDc(dc) {
   RT.dc = dc; dc.binaryType = "arraybuffer";
-  dc.onopen = () => { RT.open = true; ledUpdate(); camStop(); showLink(""); rtStatus(""); sound("set"); rtIndex(); if (mode === "control") showPane("feed"); };
+  dc.onopen = () => { RT.open = true; ledUpdate(); lcamStop(); showLink(""); rtStatus(""); sound("set"); rtIndex(); if (mode === "control") showPane("feed"); };
   dc.onclose = () => { RT.open = false; ledUpdate(); d1(); };
   dc.onmessage = (e) => rtRecv(e.data);
 }
@@ -1328,9 +1429,9 @@ function drawQr(text) {
 }
 function showLink(cls) { const el = $("link"); el.classList.toggle("qr", cls.includes("qr")); el.classList.toggle("cam", cls.includes("cam")); }
 let lstream = null, lscanT = 0;
-function camStop() { clearTimeout(lscanT); if (lstream) lstream.getTracks().forEach((t) => t.stop()); lstream = null; $("lvid").srcObject = null; }
+function lcamStop() { clearTimeout(lscanT); if (lstream) lstream.getTracks().forEach((t) => t.stop()); lstream = null; $("lvid").srcObject = null; }
 async function camScan(want, done) {             // legge un QR dalla fotocamera
-  camStop();
+  lcamStop();
   lstream = await navigator.mediaDevices.getUserMedia({ video: desk ? true : { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
   const v = $("lvid"); v.srcObject = lstream; await v.play().catch(() => {});
   const cv = document.createElement("canvas"), c = cv.getContext("2d", { willReadFrequently: true });
@@ -1339,7 +1440,7 @@ async function camScan(want, done) {             // legge un QR dalla fotocamera
     if (v.videoWidth) {
       const s = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight)); cv.width = Math.round(v.videoWidth * s); cv.height = Math.round(v.videoHeight * s);
       c.drawImage(v, 0, 0, cv.width, cv.height); const r = jsQR(c.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, { inversionAttempts: "attemptBoth" });
-      if (r && r.data.startsWith("JRN1:" + want)) { camStop(); sound("set"); done(r.data); return; }
+      if (r && r.data.startsWith("JRN1:" + want)) { lcamStop(); sound("set"); done(r.data); return; }
     }
     lscanT = setTimeout(tick, 200);
   };
@@ -1455,7 +1556,11 @@ async function rtImport1(meta, blobs, chunks) {
   const P = [meta].concat(meta.att || []); blobs.forEach((b, j) => { P[b.i].blob = new Blob(chunks[j], { type: b.mime }); });
   const old = items.find((i) => ikey(i) === k);
   if (old && (old.mod || old.created) >= mod) return;                  // qui è già più recente
-  if (old) meta.name = old.name;                                       // stessa nota: tiene il nome che ha qui
+  if (old && old.name.slice(0, 6) === (meta.name || "").slice(0, 6)) meta.name = old.name;   // stessa nota, stesso giorno: tiene il nome che ha qui
+  else if (old) {                                                      // data cambiata sull'altro dispositivo: nuovo nome anche qui
+    const pre = (meta.name || "").slice(0, 6); meta.name = /^\d{6}$/.test(pre) && !items.some((i) => i !== old && i.name === meta.name) ? meta.name : nextName(/^\d{6}$/.test(pre) ? ymdDate(pre) : new Date(meta.created));
+    await tx("readwrite", (s) => s.delete(old.name)); for (const k of [...urls.keys()]) if (k.startsWith(old.name + "#")) { URL.revokeObjectURL(urls.get(k)); urls.delete(k); }
+  }
   else { const pre = (meta.name || "").slice(0, 6); if (!/^\d{6}$/.test(pre) || items.some((i) => i.name === meta.name)) meta.name = nextName(/^\d{6}$/.test(pre) ? ymdDate(pre) : new Date(meta.created)); }
   if (meta.folder && !S.folders.includes(meta.folder)) { S.folders.push(meta.folder); setSnap = JSON.stringify([S.folders, S.ftypes]); store.set("jrn1-set", JSON.stringify(S)); }
   if (old) { const i = items.indexOf(old); items[i] = meta; if (player && player.it === old) tapeStop(); } else items.push(meta);
@@ -1499,7 +1604,7 @@ function remoteIn(m) {                            // comandi dall'iPhone usato c
 }
 M.control = {
   enter() { if (RT.open) { showPane("feed"); showLink(""); } else pairStart(); },
-  leave() { camStop(); if (!RT.open) { rtClose(); RT.msg = ""; } showLink(""); },
+  leave() { lcamStop(); if (!RT.open) { rtClose(); RT.msg = ""; } showLink(""); },
   dial(d) { if (remoteOn()) { rtSend({ t: "in", k: "dial", d }); return true; } return desk ? setSel(sel + d) : false; },
   sdial(d) { if (remoteOn()) { rtSend({ t: "in", k: "sdial", d }); return true; } return false; },
   scroll(px) { if (remoteOn()) { rtSend({ t: "in", k: "scroll", px }); return true; } return null; },
@@ -1839,9 +1944,23 @@ function pxDraw(s, X, top, col, font) {            // X, top in pixel del displa
   return X;
 }
 function bmInit() { const cv = document.createElement("canvas"); cv.id = "d1b"; $("d1").appendChild(cv); BM.cv = cv; BM.x = cv.getContext("2d"); document.body.classList.add("bmp"); }
-function drawD1() {
-  const cv = BM.cv; if (!cv) return;
-  const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+function drawD1() { if (drawD1raw() !== false) oled(); }
+const OL = { g: null, s: null };
+function oled() {                                 // riflesso sul vetro (copia tenue spostata) + bloom economico (riduci e allarga)
+  const cv = BM.cv; if (!cv || !cv.width) return; const c = BM.x, W = cv.width, H = cv.height;
+  if (!OL.g) { OL.g = document.createElement("canvas"); OL.s = document.createElement("canvas"); }
+  const g = OL.g, s = OL.s; if (g.width !== W || g.height !== H) { g.width = W; g.height = H; s.width = Math.max(1, W >> 3); s.height = Math.max(1, H >> 3); }
+  const gx = g.getContext("2d"), sx = s.getContext("2d");
+  gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);
+  sx.globalCompositeOperation = "copy"; sx.imageSmoothingEnabled = true; sx.drawImage(g, 0, 0, s.width, s.height);
+  c.save(); c.globalCompositeOperation = "lighter"; c.imageSmoothingEnabled = true;
+  const o = Math.max(1, Math.round(DPR * 1.5)); c.globalAlpha = 0.16; c.drawImage(g, o, o);   // sdoppiamento
+  c.globalAlpha = 0.32; c.drawImage(s, 0, 0, W, H);                                           // bloom
+  c.restore();
+}
+function drawD1raw() {
+  const cv = BM.cv; if (!cv) return false;
+  const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return false;
   if (cv.width !== Math.round(W * DPR) || cv.height !== Math.round(H * DPR)) { cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
   const inkC = "#fff", bg = "#000";               // il display resta nero anche col tema chiaro
   const u = (BM.u = Math.max(2, Math.round((14 * DPR) / 9))), c = BM.x;   // altezza delle maiuscole circa 14px
@@ -1861,7 +1980,7 @@ function drawD1() {
   const lab = msg ? LABEL[mode] : M[mode].lab ? M[mode].lab() : LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, "  "), tm = $("d1t").textContent;
   let X = pad;
   if (MODEICON[mode] && !msg) X = pxDraw([MODEICON[mode]], X, top, inkC, "icon") + 5;   // cattura: icona a pixel
-  else if (lab) X = pxDraw(lab, X, top, inkC, LABEL[mode] === lab ? "bold" : null) + 6;   // sigla in grassetto
+  else if (lab) X = pxDraw(lab, X, top, inkC, LABEL[mode] === lab || mode === "consulta" ? "bold" : null) + 6;   // sigla in grassetto
   const end = cols - pad;
   if (rec && !msg) {                              // REC: VU a barre da 1px, poi il tempo
     const tw = pxText(tm), tx = end - tw; X = pxDraw(val, X, top, inkC) + (val ? 6 : 0);
@@ -1922,17 +2041,16 @@ window.addEventListener("resize", () => setTimeout(layout, 60));
 window.addEventListener("orientationchange", () => setTimeout(layout, 250));
 if (window.visualViewport) visualViewport.addEventListener("resize", () => setTimeout(layout, 60));
 /* ============ Desktop: pannello a destra, tastiera e rotella ============ */
-function applySide() {                           // a destra: cartelle, calendario o entrambi
-  const sd = mode === "cartelle" || side === "both", sc = mode === "calendario" || side === "both";
+function applySide() {                           // a sinistra: cartelle o calendario
+  const sd = mode === "cartelle", sc = mode === "calendario";   // a sinistra del feed: o l'uno o l'altro
   document.body.classList.toggle("sdir", sd); document.body.classList.toggle("scal", sc);
   if (sd) renderDirs(); if (sc) renderCal();
 }
-function deskFold() {                            // folder su desktop: DIR → CAL → entrambi → nessuno
+function deskFold() {                            // folder su desktop: DIR → CAL → nessuno
   if (rec) { sound("stop"); return; }
   if (mode === "cartelle") setMode("calendario");
-  else if (mode === "calendario") { side = "both"; setMode("consulta"); }
-  else if (side === "both") { side = ""; applySide(); }
-  else { side = ""; setMode("cartelle"); }
+  else if (mode === "calendario") setMode("consulta");
+  else setMode("cartelle");
   sound("menu"); d1();
 }
 function kbShiftDown() { if (shId !== null) return; shId = "kb"; shT = performance.now(); shUsed = false; shiftB.classList.add("down"); if (edOn()) draft.anchor = draft.anchor == null ? draft.caret : draft.anchor; }

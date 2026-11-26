@@ -1777,8 +1777,8 @@ function keyPress(k) {
 const ed = $("ed");
 function esc(s) { return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])).replace(/\n/g, "↵"); }
 function renderEd() {
-  if (!editTarget) store.set("jrn1-draft", draft.text);
-  drawD1();
+  if (!editTarget) { clearTimeout(BM.saveT); BM.saveT = setTimeout(() => store.set("jrn1-draft", draft.text), 300); }
+  BM.blink0 = performance.now(); drawD1();         // il cursore riparte acceso a ogni spostamento
   const t = draft.text, c = draft.caret; let h;
   if (hasSel()) { const [a, b] = selRange(); h = esc(t.slice(0, a)) + (c === a ? '<span class="car"></span>' : "") + '<span class="sx">' + esc(t.slice(a, b)) + "</span>" + (c === b ? '<span class="car"></span>' : "") + esc(t.slice(b)); }
   else h = esc(t.slice(0, c)) + '<span class="car"></span>' + esc(t.slice(c));
@@ -2019,17 +2019,22 @@ const pxGlyph = (ch) => PXF[ch] || (ch === "\n" ? PXF["↵"] : PXF["?"]);
 const pxWidth = (ch) => pxGlyph(ch)[0];
 const pxText = (s) => { let w = 0; for (const ch of s) w += pxWidth(ch); return w; };
 function pxDraw(s, X, top, col, font) {            // X, top in pixel del display (top = riga 3 del font); torna la X finale
-  const c = BM.x, u = BM.u, [pw, ph] = pxSize(u); c.fillStyle = col;   // pixel separati, rettangolari in orizzontale (scanline)
+  const c = BM.x, u = BM.u, [pw, ph] = pxSize(u), on = col === "#000" ? 0 : 1; c.fillStyle = col;   // pixel separati, rettangolari in orizzontale (scanline)
   for (const ch of (Array.isArray(s) ? s : [...s])) {
     const g = font === "icon" ? PXI[ch] : font === "bold" ? PXFB[ch] || pxGlyph(ch) : pxGlyph(ch), w = g[0];
-    for (let r = 0; r < BM.NR; r++) { const v = g[1 + BM.R0 + r]; if (v) for (let k = 0; k < w; k++) if ((v >> (w - 1 - k)) & 1) c.fillRect((X + k) * u, (top + r) * u, pw, ph); }
+    for (let r = 0; r < BM.NR; r++) { const v = g[1 + BM.R0 + r]; if (v) for (let k = 0; k < w; k++) if ((v >> (w - 1 - k)) & 1) { c.fillRect((X + k) * u, (top + r) * u, pw, ph); litSet(X + k, top + r, on); } }
     X += w;
   }
   return X;
 }
+function litSet(x, y, v) { if (BM.lit && x >= BM.cx0 && x < BM.cx1 && y >= 0 && y < BM.R && x >= 0) BM.lit[y * BM.C + x] = v; }   // celle accese, per il bleeding (senza rileggere il canvas)
 const pxSize = (u) => [u - (u >= 4 ? 1 : 0), u - (u >= 4 ? 2 : u >= 2 ? 1 : 0)];   // larghezza e altezza del pixel acceso
 function bmInit() { const cv = document.createElement("canvas"); cv.id = "d1b"; $("d1").appendChild(cv); BM.cv = cv; BM.x = cv.getContext("2d"); document.body.classList.add("bmp"); }
-function drawD1() { if (drawD1raw() !== false) oled(); }
+const FR = { t: 0, last: 0 };
+function drawD1() {                               // al massimo 24 fotogrammi al secondo: le richieste ravvicinate si uniscono
+  if (FR.t) return; const wait = Math.max(0, 1000 / 24 - (performance.now() - FR.last));
+  FR.t = setTimeout(() => { FR.t = 0; FR.last = performance.now(); if (drawD1raw() !== false) oled(); }, wait);
+}
 const OL = { g: null, s: null };
 function oled() {                                 // riflesso sul vetro (copia tenue spostata) e griglia dei pixel spenti
   const cv = BM.cv; if (!cv || !cv.width) return; const c = BM.x, W = cv.width, H = cv.height;
@@ -2038,19 +2043,14 @@ function oled() {                                 // riflesso sul vetro (copia t
   const g = OL.g, sm = OL.s, bl = OL.b;
   if (g.width !== W || g.height !== H) { g.width = bl.width = W; g.height = bl.height = H; }
   if (sm.width !== C || sm.height !== Rw) { sm.width = C; sm.height = Rw; OL.img = null; }
-  const gx = g.getContext("2d"), sx = sm.getContext("2d", { willReadFrequently: true }), bx = bl.getContext("2d");
+  const gx = g.getContext("2d"), sx = sm.getContext("2d"), bx = bl.getContext("2d");
   gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);                              // solo i pixel accesi (il riflesso non c'è ancora)
-  // bleeding calcolato sulla griglia del display: ogni pixel spento prende un po' di luce dai pixel accesi vicini, con un tetto
-  sx.globalCompositeOperation = "copy"; sx.imageSmoothingEnabled = false; sx.drawImage(cv, 0, 0, GW, GH, 0, 0, C, Rw);   // un campione per cella
-  const src = sx.getImageData(0, 0, C, Rw).data, n = C * Rw, lit = new Float32Array(n), rgb = [0, 0, 0];
-  for (let i = 0; i < n; i++) { const r = src[i * 4], gg = src[i * 4 + 1], b = src[i * 4 + 2], m = Math.max(r, gg, b); if (m > 128) { lit[i] = 1; rgb[0] = r; rgb[1] = gg; rgb[2] = b; } }
+  // bleeding sulla griglia del display: ogni pixel spento prende un po' di luce dai pixel accesi vicini, con un tetto
+  const lit = BM.lit && BM.C === C ? BM.lit : null, n = C * Rw, acc = OL.acc && OL.acc.length === n ? OL.acc.fill(0) : (OL.acc = new Float32Array(n));
   const img = OL.img || (OL.img = sx.createImageData(C, Rw)), d = img.data, K = [[1, 0, 0.5], [0, 1, 0.5], [1, 1, 0.3], [2, 0, 0.2], [0, 2, 0.2], [2, 1, 0.12], [1, 2, 0.12], [2, 2, 0.06]];
-  for (let y = 0; y < Rw; y++) for (let x = 0; x < C; x++) {
-    const i = y * C + x; let v = 0;
-    if (!lit[i]) for (const [dx, dy, w] of K) for (const [sx2, sy2] of [[dx, dy], [-dx, -dy], [-dy, dx], [dy, -dx]]) { const xx = x + sx2, yy = y + sy2; if (xx >= 0 && yy >= 0 && xx < C && yy < Rw && lit[yy * C + xx]) v += w; }
-    v = Math.min(0.22, v * 0.08);                 // tetto: il testo in negativo (selezione) resta leggibile
-    d[i * 4] = rgb[0] * v || 255 * v; d[i * 4 + 1] = rgb[1] * v || 255 * v; d[i * 4 + 2] = rgb[2] * v || 255 * v; d[i * 4 + 3] = 255;
-  }
+  if (lit) for (let y = 0; y < Rw; y++) for (let x = 0; x < C; x++) if (lit[y * C + x]) for (const [dx, dy, w] of K) for (const [ax, ay] of [[dx, dy], [-dx, -dy], [-dy, dx], [dy, -dx]]) { const xx = x + ax, yy = y + ay; if (xx >= 0 && yy >= 0 && xx < C && yy < Rw) acc[yy * C + xx] += w; }
+  for (let i = 0; i < n; i++) { const v = lit && lit[i] ? 0 : Math.min(0.22, acc[i] * 0.08) * 255, p = OL.prev && OL.prev.length === n && OL.prev[i] && !(lit && lit[i]) ? 0.12 * 255 : 0, q = Math.min(255, v + p); d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = q; d[i * 4 + 3] = 255; }   // + ghosting: le celle appena spente restano un attimo accese
+  OL.prev = lit ? lit.slice() : null;
   sx.putImageData(img, 0, 0);
   bx.globalCompositeOperation = "copy"; bx.imageSmoothingEnabled = false; bx.drawImage(sm, 0, 0, C, Rw, 0, 0, GW, GH);
   bx.globalCompositeOperation = "destination-in"; bx.fillStyle = BM.mask; bx.fillRect(0, 0, GW, GH);      // solo dentro le celle dei pixel
@@ -2079,6 +2079,8 @@ function drawD1raw() {
   const u = (BM.u = DPR >= 1.5 ? Math.max(4, Math.round((14 * DPR) / 9)) : 2), c = BM.x;   // almeno 4 px fisici per pixel: si vede la griglia
   const cols = Math.floor(cv.width / u), rows = Math.floor(cv.height / u), top = Math.ceil((rows - BM.NR) / 2) + 1, pad = Math.round(10 * DPR / u);
   c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height);
+  if (!BM.lit || BM.C !== cols || BM.R !== rows) { BM.lit = new Uint8Array(cols * rows); BM.C = cols; BM.R = rows; } else BM.lit.fill(0);
+  BM.cx0 = 0; BM.cx1 = cols;
   if (!BM.pat || BM.patU !== u) {                  // pixel spenti (20%) e maschera delle celle
     const pc = document.createElement("canvas"); pc.width = pc.height = u; const px = pc.getContext("2d"), [pw, ph] = pxSize(u);
     px.fillStyle = "rgba(255,255,255,0.2)"; px.fillRect(0, 0, pw, ph); BM.pat = c.createPattern(pc, "repeat"); BM.patU = u;
@@ -2089,11 +2091,11 @@ function drawD1raw() {
     const t = [...draft.text], car = draft.caret, xs = [0]; for (const ch of t) xs.push(xs[xs.length - 1] + pxWidth(ch));
     const vw = cols - pad * 2, cx = xs[car];
     if (cx - BM.edX > vw - 12) BM.edX = cx - vw + 24; else if (cx - BM.edX < 6) BM.edX = Math.max(0, cx - 24);
-    c.save(); c.beginPath(); c.rect(pad * u - u, 0, (vw + 2) * u, cv.height); c.clip();
+    c.save(); c.beginPath(); c.rect(pad * u - u, 0, (vw + 2) * u, cv.height); c.clip(); BM.cx0 = pad - 1; BM.cx1 = pad + vw + 1;
     const X0 = pad - BM.edX; pxDraw(t.join(""), X0, top, inkC);
-    if (hasSel()) { const [a, b] = selRange(); c.fillStyle = inkC; c.fillRect((X0 + xs[a]) * u, top * u, (xs[b] - xs[a]) * u, BM.NR * u); pxDraw(t.slice(a, b).join(""), X0 + xs[a], top, bg); }
-    if (Math.floor(performance.now() / 530) % 2 === 0) { c.fillStyle = inkC; c.fillRect((X0 + cx) * u, top * u, Math.max(1, Math.round(DPR)), BM.NR * u); }
-    c.restore(); BM.mqT = setTimeout(drawD1, 530); return;
+    if (hasSel()) { const [a, b] = selRange(); c.fillStyle = inkC; c.fillRect((X0 + xs[a]) * u, top * u, (xs[b] - xs[a]) * u, BM.NR * u); for (let y = top; y < top + BM.NR; y++) for (let x = X0 + xs[a]; x < X0 + xs[b]; x++) litSet(x, y, 1); pxDraw(t.slice(a, b).join(""), X0 + xs[a], top, bg); }
+    if (Math.floor((performance.now() - (BM.blink0 || 0)) / 530) % 2 === 0) { c.fillStyle = inkC; c.fillRect((X0 + cx) * u, top * u, Math.max(1, Math.round(DPR)), BM.NR * u); }
+    c.restore(); BM.mqT = setTimeout(drawD1, 530 - ((performance.now() - (BM.blink0 || 0)) % 530)); return;
   }
   const lab = msg ? LABEL[mode] : M[mode].lab ? M[mode].lab() : LABEL[mode], val = $("d1v").textContent.replace(/ {2,}/g, "  "), tm = $("d1t").textContent;
   let X = pad;
@@ -2117,7 +2119,7 @@ function drawD1raw() {
   // testo lungo: scorre (marquee) con una pausa all'inizio
   const key = mode + "|" + val; if (key !== BM.mqKey) { BM.mqKey = key; BM.mq = performance.now(); }
   const gap = 24, loop = w + gap, el = Math.max(0, performance.now() - BM.mq - 1500), off = Math.floor((el / 1000) * 20) % loop;
-  c.save(); c.beginPath(); c.rect(X * u, 0, avail * u, cv.height); c.clip();
+  c.save(); c.beginPath(); c.rect(X * u, 0, avail * u, cv.height); c.clip(); BM.cx0 = X; BM.cx1 = X + avail;
   pxDraw(val, X - off, top, inkC); pxDraw(val, X - off + loop, top, inkC); c.restore();
   BM.mqT = setTimeout(drawD1, 50);
 }

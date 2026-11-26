@@ -2033,12 +2033,18 @@ function drawD1() { if (drawD1raw() !== false) oled(); }
 const OL = { g: null, s: null };
 function oled() {                                 // riflesso sul vetro (copia tenue spostata) e griglia dei pixel spenti
   const cv = BM.cv; if (!cv || !cv.width) return; const c = BM.x, W = cv.width, H = cv.height;
-  if (!OL.g) OL.g = document.createElement("canvas");
-  const g = OL.g; if (g.width !== W || g.height !== H) { g.width = W; g.height = H; }
-  const gx = g.getContext("2d"); gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);
+  if (!OL.g) { OL.g = document.createElement("canvas"); OL.s = document.createElement("canvas"); OL.b = document.createElement("canvas"); }
+  const g = OL.g, sm = OL.s, bl = OL.b, k = BM.u * 1.5;
+  if (g.width !== W || g.height !== H) { g.width = bl.width = W; g.height = bl.height = H; sm.width = Math.max(1, Math.round(W / k)); sm.height = Math.max(1, Math.round(H / k)); }
+  const gx = g.getContext("2d"), sx = sm.getContext("2d"), bx = bl.getContext("2d"), GW = Math.floor(W / BM.u) * BM.u, GH = Math.floor(H / BM.u) * BM.u;
+  gx.globalCompositeOperation = "copy"; gx.drawImage(cv, 0, 0);                              // solo i pixel accesi
+  sx.globalCompositeOperation = "copy"; sx.imageSmoothingEnabled = true; sx.drawImage(g, 0, 0, sm.width, sm.height);
+  bx.globalCompositeOperation = "copy"; bx.imageSmoothingEnabled = true; bx.drawImage(sm, 0, 0, W, H);   // alone morbido…
+  bx.globalCompositeOperation = "destination-in"; bx.fillStyle = BM.mask; bx.fillRect(0, 0, GW, GH);      // …che resta solo dentro le celle dei pixel (bleeding)
   c.save(); c.globalCompositeOperation = "lighter";
-  c.globalAlpha = 0.16; c.drawImage(g, 0, BM.u * 3);                                          // sdoppiamento: riflesso spostato in verticale di 3 pixel (bloom tolto per ora)
-  c.globalAlpha = 1; c.fillStyle = BM.pat; c.fillRect(0, 0, Math.floor(W / BM.u) * BM.u, Math.floor(H / BM.u) * BM.u);   // pixel spenti al 10%
+  c.globalAlpha = 0.24; c.drawImage(g, 0, -BM.u * 3);                                         // sdoppiamento: riflesso 3 pixel più in alto
+  c.globalAlpha = 0.7; c.drawImage(bl, 0, 0);                                                  // bleeding nei pixel spenti vicini
+  c.globalAlpha = 1; c.fillStyle = BM.pat; c.fillRect(0, 0, GW, GH);                           // pixel spenti al 20%
   c.restore();
 }
 function drawD1raw() {
@@ -2049,9 +2055,10 @@ function drawD1raw() {
   const u = (BM.u = DPR >= 1.5 ? Math.max(4, Math.round((14 * DPR) / 9)) : 2), c = BM.x;   // almeno 4 px fisici per pixel: si vede la griglia
   const cols = Math.floor(cv.width / u), rows = Math.floor(cv.height / u), top = Math.floor((rows - BM.NR) / 2), pad = Math.round(10 * DPR / u);
   c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height);
-  if (!BM.pat || BM.patU !== u) {                  // pixel spenti appena visibili (10%)
+  if (!BM.pat || BM.patU !== u) {                  // pixel spenti (20%) e maschera delle celle
     const pc = document.createElement("canvas"); pc.width = pc.height = u; const px = pc.getContext("2d"), [pw, ph] = pxSize(u);
-    px.fillStyle = "rgba(255,255,255,0.1)"; px.fillRect(0, 0, pw, ph); BM.pat = c.createPattern(pc, "repeat"); BM.patU = u;
+    px.fillStyle = "rgba(255,255,255,0.2)"; px.fillRect(0, 0, pw, ph); BM.pat = c.createPattern(pc, "repeat"); BM.patU = u;
+    const mc = document.createElement("canvas"); mc.width = mc.height = u; const mx = mc.getContext("2d"); mx.fillStyle = "#fff"; mx.fillRect(0, 0, pw, ph); BM.mask = c.createPattern(mc, "repeat");
   }
   clearTimeout(BM.mqT);
   if (edOn()) {                                   // orizzontale (o TEXT su desktop): riga di scrittura con cursore e selezione

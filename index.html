@@ -163,7 +163,7 @@ body.land #d1 .l1, body.land #d1c { display: none; }
 body.land #kb { grid-row: 2 / 6; display: flex; flex-direction: column; gap: 1px; min-height: 0; background: var(--line); border: var(--border-hairline) solid var(--line); }
 .kr { display: flex; gap: 1px; flex: 1; min-height: 0; }
 .k { position: relative; flex: 1 1 0; min-width: 0; padding: 4px 7px; background: var(--surface); touch-action: none; overflow: hidden; }
-.k.down { background: var(--surface-inverse); color: var(--ink-inverse); }
+.k.down { background-color: transparent; }   /* premuto: la calotta resta (vedi sotto), niente inversione */
 .k .lb { display: block; line-height: 20px; }
 .k .lb svg { display: block; height: 20px; }
 .k .lb svg path, .k .lb svg circle { fill: none; stroke: currentColor; stroke-width: 1; }
@@ -176,7 +176,8 @@ body.land #kb { gap: 0; background: var(--surface); border: 0; }
 .k.w15 { background-image: url(kc/cap-light-1.5u.png); } .k.w6 { background-image: url(kc/cap-light-6u.png); }
 :root[data-theme="dark"] .k { background-image: url(kc/cap-dark-1u.png); color: #4f4f4f; }
 :root[data-theme="dark"] .k.w15 { background-image: url(kc/cap-dark-1.5u.png); } :root[data-theme="dark"] .k.w6 { background-image: url(kc/cap-dark-6u.png); }
-.k.down { color: #929292; transform: translateY(13.5%); clip-path: inset(0 0 13.5% 0); }   /* premuto: la calotta scende (8 su 59) */
+.k.down { color: #929292; background-size: 100% 86.5%; background-position: 0 100%; }   /* premuto: la faccia scende di 8 su 59, il fianco si accorcia, il fondo resta */
+.k.down > span { transform: translateY(8px); }
 :root[data-theme="dark"] .k.down { color: #4f4f4f; }
 body.land .k { padding: 6px 14px 0; }
 body.land .k .lb { font-size: 16px; line-height: 20px; }

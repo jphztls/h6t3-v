@@ -176,8 +176,8 @@ body.land #kb { gap: 0; background: var(--surface); border: 0; }
 .k.w15 { background-image: url(kc/cap-light-1.5u.png); } .k.w6 { background-image: url(kc/cap-light-6u.png); }
 :root[data-theme="dark"] .k { background-image: url(kc/cap-dark-1u.png); color: #4f4f4f; }
 :root[data-theme="dark"] .k.w15 { background-image: url(kc/cap-dark-1.5u.png); } :root[data-theme="dark"] .k.w6 { background-image: url(kc/cap-dark-6u.png); }
-.k.down { color: #929292; background-size: 100% 86.5%; background-position: 0 100%; }   /* premuto: la faccia scende di 8 su 59, il fianco si accorcia, il fondo resta */
-.k.down > span { transform: translateY(8px); }
+.k.down { color: #929292; transform: translateY(13.5%); }   /* premuto: tutto il tasto scende di 8 su 59 e passa dietro al tasto davanti (la riga sotto è disegnata dopo) */
+body.land #kb { overflow: hidden; }                            /* l'ultima riga sparisce dietro il bordo della tastiera */
 :root[data-theme="dark"] .k.down { color: #4f4f4f; }
 body.land .k { padding: 6px 14px 0; }
 body.land .k .lb { font-size: 16px; line-height: 20px; }

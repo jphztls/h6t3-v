@@ -1,0 +1,253 @@
+{
+  "name": "KCE-1 keycaps",
+  "version": 1,
+  "generated": "2026-11-27",
+  "scale": 3,
+  "baseMode": "none",
+  "note": "cap-* = calotta; base-* (solo se baseMode non è none) = ombra/pozzetto fisso sotto, stessa dimensione: sovrapporle. Premuto = spostare la calotta in basso di press.dy; se non c'è base si muove solo il tasto.",
+  "unit": {
+    "widthPt": 71,
+    "heightPt": 59
+  },
+  "margins": {
+    "xPt": 1,
+    "topPt": 1.75,
+    "bottomPt": 0
+  },
+  "press": {
+    "dy": 8,
+    "unit": "pt",
+    "downMs": 0,
+    "upMs": 0,
+    "easing": "cubic-bezier(.2,.8,.2,1)"
+  },
+  "light": {
+    "azimuthDeg": 325,
+    "elevationDeg": 53
+  },
+  "nineSlice": {
+    "order": "top right bottom left",
+    "px": [
+      26,
+      27,
+      41,
+      27
+    ],
+    "pt": [
+      8.667,
+      9,
+      13.667,
+      9
+    ],
+    "masterPt": [
+      71,
+      59
+    ]
+  },
+  "cssExample": "border-image: url(cap-light-master.png) 26 27 41 27 fill / 8.667px 9px 13.667px 9px stretch; (se c'è base-light-master.png sotto, stessa regola; premuto: transform: translateY(8px) sulla calotta)",
+  "label": {
+    "font": "400 32.5px Helvetica",
+    "mode": "print",
+    "color": {
+      "light": "#929292",
+      "dark": "#4f4f4f"
+    },
+    "textShadow": {
+      "light": "none",
+      "dark": "none"
+    },
+    "textYOffsetPt": 1.3,
+    "centerPt": {
+      "note": "centro faccia superiore, relativo alla cella",
+      "yFromTopPt": 24.88
+    }
+  },
+  "colors": {
+    "light": {
+      "cap": "#f0f0f0",
+      "background": "#ffffff"
+    },
+    "dark": {
+      "cap": "#1d1d1d",
+      "background": "#000000"
+    }
+  },
+  "files": [
+    {
+      "theme": "light",
+      "size": "master",
+      "cap": "cap-light-master.png",
+      "base": null,
+      "px": [
+        213,
+        177
+      ],
+      "pt": [
+        71,
+        59
+      ],
+      "nineSlice": true
+    },
+    {
+      "theme": "light",
+      "size": "1u",
+      "cap": "cap-light-1u.png",
+      "base": null,
+      "px": [
+        213,
+        177
+      ],
+      "pt": [
+        71,
+        59
+      ],
+      "nineSlice": false
+    },
+    {
+      "theme": "light",
+      "size": "1.5u",
+      "cap": "cap-light-1.5u.png",
+      "base": null,
+      "px": [
+        320,
+        177
+      ],
+      "pt": [
+        106.67,
+        59
+      ],
+      "nineSlice": false
+    },
+    {
+      "theme": "light",
+      "size": "6u",
+      "cap": "cap-light-6u.png",
+      "base": null,
+      "px": [
+        1278,
+        177
+      ],
+      "pt": [
+        426,
+        59
+      ],
+      "nineSlice": false
+    },
+    {
+      "theme": "dark",
+      "size": "master",
+      "cap": "cap-dark-master.png",
+      "base": null,
+      "px": [
+        213,
+        177
+      ],
+      "pt": [
+        71,
+        59
+      ],
+      "nineSlice": true
+    },
+    {
+      "theme": "dark",
+      "size": "1u",
+      "cap": "cap-dark-1u.png",
+      "base": null,
+      "px": [
+        213,
+        177
+      ],
+      "pt": [
+        71,
+        59
+      ],
+      "nineSlice": false
+    },
+    {
+      "theme": "dark",
+      "size": "1.5u",
+      "cap": "cap-dark-1.5u.png",
+      "base": null,
+      "px": [
+        320,
+        177
+      ],
+      "pt": [
+        106.67,
+        59
+      ],
+      "nineSlice": false
+    },
+    {
+      "theme": "dark",
+      "size": "6u",
+      "cap": "cap-dark-6u.png",
+      "base": null,
+      "px": [
+        1278,
+        177
+      ],
+      "pt": [
+        426,
+        59
+      ],
+      "nineSlice": false
+    }
+  ],
+  "params": {
+    "uw": 71,
+    "uh": 59,
+    "baseMode": "none",
+    "mx": 1,
+    "mt": 1.75,
+    "mb": 0,
+    "radius": 6,
+    "bevS": 7,
+    "bevT": 1.5,
+    "bevB": 12.5,
+    "bevH": 7.3,
+    "shoulder": 0.6,
+    "dish": 3.6,
+    "dishSph": 0,
+    "az": 325,
+    "el": 53,
+    "amb": 0.76,
+    "shin": 55,
+    "grain": 0.23,
+    "grainSize": 0.7,
+    "seed": 0,
+    "lmode": "print",
+    "lsize": 32.5,
+    "lweight": "400",
+    "lh": 1.5,
+    "shAmt": 0.44,
+    "shBlur": 0,
+    "shDist": 4.5,
+    "press": 8,
+    "tDown": 0,
+    "tUp": 0,
+    "ease": "cubic-bezier(.2,.8,.2,1)",
+    "hold": false,
+    "expScale": 3,
+    "expMaster": true,
+    "exp1": true,
+    "exp15": true,
+    "exp6": true,
+    "light": {
+      "cap": "#f0f0f0",
+      "lab": "#929292",
+      "bg": "#ffffff",
+      "well": "#757575",
+      "contrast": 0.7,
+      "spec": 0.53
+    },
+    "dark": {
+      "cap": "#1d1d1d",
+      "lab": "#4f4f4f",
+      "bg": "#000000",
+      "well": "#060606",
+      "contrast": 1.75,
+      "spec": 0.16
+    }
+  }
+}

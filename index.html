@@ -169,6 +169,15 @@ body.land #kb { grid-row: 2 / 6; display: flex; flex-direction: column; gap: 1px
 .k .lb svg path, .k .lb svg circle { fill: none; stroke: currentColor; stroke-width: 1; }
 .k .lb svg .fill { fill: currentColor; }
 .k.w15 { flex-grow: 1.5; } .k.w6 { flex-grow: 6; }
+/* Tasti KCE-1 (prova 27/11): calotta in 9-slice dalle PNG dell'editor, stesso layout e misure */
+body.land #kb { gap: 0; background: var(--surface); border: 0; }
+.kr { gap: 0; }
+.k { background: url(kc/cap-light-1u.png) 0 0 / 100% 100% no-repeat; color: #929292; padding: 6px 11px 0; }   /* PNG già alla misura (1u, 1.5u, 6u): texture senza giunture */
+.k.w15 { background-image: url(kc/cap-light-1.5u.png); } .k.w6 { background-image: url(kc/cap-light-6u.png); }
+:root[data-theme="dark"] .k { background-image: url(kc/cap-dark-1u.png); color: #4f4f4f; }
+:root[data-theme="dark"] .k.w15 { background-image: url(kc/cap-dark-1.5u.png); } :root[data-theme="dark"] .k.w6 { background-image: url(kc/cap-dark-6u.png); }
+.k.down { color: #929292; transform: translateY(13.5%); clip-path: inset(0 0 13.5% 0); }   /* premuto: la calotta scende (8 su 59) */
+:root[data-theme="dark"] .k.down { color: #4f4f4f; }
 body.land #ctl { grid-row: 6; padding: 0; gap: 28px; min-height: 0; }
 body.land #shift { width: 140px; flex: none; align-self: stretch; }
 body.land #strip { display: block; flex: 1; align-self: stretch; min-width: 0; }

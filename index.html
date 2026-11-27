@@ -181,6 +181,8 @@ body.land #kb { gap: 0; background: var(--surface); border: 0; }
 body.land .k { padding: 6px 14px 0; }
 body.land .k .lb { font-size: 16px; line-height: 20px; }
 body.land .k .lb.wd { font-size: 14px; }
+body.land .k .lb.lt { color: #7c7c7c; }                                  /* lettere: appena più evidenti delle altre legende */
+:root[data-theme="dark"] body.land .k .lb.lt { color: #636363; }
 body.land .k .lb.on { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }   /* attivo per un tasto */
 body.land .k .lb.lock { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }  /* bloccato */
 body.land .k .lf, body.land .k .ls { position: absolute; font-size: 14px; line-height: 16px; }
@@ -1741,7 +1743,7 @@ function renderKb() {
 }
 function drawKey(b) {
   const k = b.dataset.k, m = k === "Aa" ? caps : k === "fn" ? fnM : k === "SYM" ? symM : 0;
-  let h = '<span class="lb' + (k.length > 1 ? " wd" : "") + (m === 1 ? " on" : m === 2 ? " lock" : "") + '">' + esc(k === " " ? "" : /^[a-z]$/.test(k) ? k.toUpperCase() : k) + "</span>";
+  let h = '<span class="lb' + (k.length > 1 ? " wd" : /^[a-z]$/.test(k) ? " lt" : "") + (m === 1 ? " on" : m === 2 ? " lock" : "") + '">' + esc(k === " " ? "" : k === "SYM" ? "sym" : /^[a-z]$/.test(k) ? k.toUpperCase() : k) + "</span>";
   if (FN[k]) h += '<span class="lf">' + esc(FN[k]) + "</span>";
   if (SYK[k]) h += '<span class="ls">' + esc(SYK[k]) + "</span>";
   b.innerHTML = h;
